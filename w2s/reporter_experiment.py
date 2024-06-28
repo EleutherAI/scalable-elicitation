@@ -91,11 +91,12 @@ def train_and_eval_reporter(
         "acc": float(acc_result.estimate),
         "acc_lo": float(acc_result.lower),
         "acc_hi": float(acc_result.upper),
-        "num_weak": len(set.union(*(s.weak_ids_used for s in reporter.stages))),
-        "num_oracle": len(
-            reporter.oracle.ids_labeled
-        ),  # could be diff from num_queries
+        "num_weak": len(set.union(*(set(s.weak_ids_used) for s in reporter.stages))),
+        "num_weak_nonunique": sum(len(s.weak_ids_used) for s in reporter.stages),
+        "num_oracle": len(set(reporter.oracle.ids_labeled)),
+        "num_oracle_nonunique": len(reporter.oracle.ids_labeled),
         **weak_results,
+        "stages": [s.to_dict() for s in reporter.stages],
         "oracle_ids": list(reporter.oracle.ids_labeled),
         "ids": test_ds["id"],
         "calibrated_logodds": cal_logodds.tolist(),

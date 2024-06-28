@@ -25,7 +25,7 @@ from w2s.utils import (
 
 class Oracle:
     _df: pd.DataFrame
-    ids_labeled: set
+    ids_labeled: list
 
     def __init__(self, gt_dataset: Dataset, input_col: str = "txt") -> None:
         assert (
@@ -39,14 +39,14 @@ class Oracle:
             self._df.drop(columns=["labels"], inplace=True)
         self.input_col = input_col
 
-        self.ids_labeled = set()
+        self.ids_labeled = list()
 
     def query_id(self, id: str) -> float:
-        self.ids_labeled.add(id)
+        self.ids_labeled.append(id)
         return assert_type(float, self._df.loc[id]["soft_label"])
 
     def query_ids(self, ids: list) -> pd.DataFrame:
-        self.ids_labeled.update(ids)
+        self.ids_labeled.extend(ids)
         return self._df.loc[ids]
 
     def get_inputs(self) -> pd.DataFrame:
@@ -54,7 +54,7 @@ class Oracle:
         return self._df.drop(columns=["soft_label", "hard_label"], inplace=False)
 
     def reset(self):
-        self.ids_labeled = set()
+        self.ids_labeled = list()
 
 
 class Reporter(ABC):
@@ -131,7 +131,7 @@ class SftStage:
         "random", "most_confident_label", "least_confident_pred"
     ] = "random"
     n_test: int = 0
-    weak_ids_used: set = set()
+    weak_ids_used: list
 
     def __init__(
         self,
@@ -156,6 +156,8 @@ class SftStage:
         self.sample_temp = sample_temp
         self.reuse_optimizer_checkpoint = bool(reuse_optimizer_checkpoint)
         self.train_args = kwargs
+        self.weak_ids_used = []
+        self.oracle_ids_used = []
 
     def get_dataset(
         self,
@@ -168,7 +170,7 @@ class SftStage:
         label_col = "soft_pred" if self.type == "weak" else "soft_label"
 
         if self.sampling == "random":
-            idxs = random.sample(range(len(inputs)), self.size)
+            idxs = random.choices(range(len(inputs)), k=self.size)  # with replacement
         elif self.sampling == "least_confident_pred":
             print("Selecting examples with highest reporter entropy for training.")
             pred_logodds = reporter(inputs["txt"])  # type: ignore
@@ -196,9 +198,10 @@ class SftStage:
                 else []
             )
             train_ds = Dataset.from_pandas(oracle.query_ids(ids), preserve_index=False)
+            self.oracle_ids_used.extend(train_ds["id"])
         else:
             train_ds = weak_ds.select(idxs)
-            self.weak_ids_used.update(train_ds["id"])
+            self.weak_ids_used.extend(train_ds["id"])
 
         ds_dict = {"train": ds_with_labels(train_ds, labels_column=label_col)}
         if self.n_test > 0:
@@ -280,7 +283,12 @@ class SftStage:
         return f"{train_args['output_dir']}/best-ckpt/optimizer.pt"
 
     def to_dict(self) -> dict:
-        return vars(self)
+        d = vars(self)
+        d["num_weak"] = len(set(self.weak_ids_used))
+        d["num_oracle"] = len(set(self.oracle_ids_used))
+        d["num_weak_nonunique"] = len(self.weak_ids_used)
+        d["num_oracle_nonunique"] = len(self.oracle_ids_used)
+        return d
 
 
 class ModularSftReporter(Reporter):
@@ -386,11 +394,9 @@ class DivDisSftReporter(Reporter):
             .shuffle()
             .select(range(len(weak_ds)))  # NOTE: this is a hyperparameter
         )
-        train_target_ds = train_target_ds.add_column(
+        train_target_ds = train_target_ds.add_column(  # type: ignore
             "labels", [-1.0] * len(train_target_ds)
-        ).cast(
-            weak_ds.features
-        )  # type: ignore
+        ).cast(weak_ds.features)
         weak_ds = concatenate_datasets([weak_ds, train_target_ds])
         weak_ds_dict = DatasetDict(train=weak_ds, test=self.test_ds)
 
