@@ -115,6 +115,7 @@ def train_and_eval_reporter(
                 "weak_soft_labels",
                 "ids",
                 "oracle_ids",
+                "stages",
             ]
         }
     )

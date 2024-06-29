@@ -4,58 +4,50 @@ import pandas as pd
 
 temp = 0.25
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
-# stages_list = [
-#     [
-#         {
-#             "modules_with_grad": "head",
-#             "type": "weak",
-#             "size": 1024,
-#             "sampling": "most_confident_label",
-#             "sample_temp": temp,
-#             "num_train_epochs": 3,
-#         },
-#         {
-#             "modules_with_grad": "all",
-#             "type": "oracle",
-#             "size": 32,
-#             "sampling": "least_confident_pred",
-#             "sample_temp": temp,
-#             "num_train_epochs": 100,
-#         },
-#         {
-#             "modules_with_grad": "all",
-#             "reinit_head": True,
-#             "type": "weak",
-#             "size": 1024,
-#             "sampling": "most_confident_label",
-#             "sample_temp": temp,
-#             "num_train_epochs": 1,
-#         },
-#         {
-#             "modules_with_grad": "all",
-#             "type": "oracle",
-#             "size": 32,
-#             "sampling": "least_confident_pred",
-#             "sample_temp": temp,
-#             "num_train_epochs": 50,
-#         },
-#     ],
-# ]
 stages_list = [
     [
         {
-            "modules_with_grad": "all",
+            "modules_with_grad": "head",
             "type": "weak",
-            "sampling": "random",
+            "sampling": "most_confident_label",
+            "sample_temp": temp,
         },
         {
             "modules_with_grad": "all",
             "type": "oracle",
-            "sampling": "random",
-            "reuse_optimizer_checkpoint": True,
+            "sampling": "least_confident_pred",
+            "sample_temp": temp,
+        },
+        {
+            "modules_with_grad": "all",
+            "reinit_head": True,
+            "type": "weak",
+            "sampling": "most_confident_label",
+            "sample_temp": temp,
+        },
+        {
+            "modules_with_grad": "all",
+            "type": "oracle",
+            "sampling": "least_confident_pred",
+            "sample_temp": temp,
         },
     ],
 ]
+# stages_list = [
+#     [
+#         {
+#             "modules_with_grad": "all",
+#             "type": "weak",
+#             "sampling": "random",
+#         },
+#         {
+#             "modules_with_grad": "all",
+#             "type": "oracle",
+#             "sampling": "random",
+#             "reuse_optimizer_checkpoint": True,
+#         },
+#     ],
+# ]
 
 salience_df = pd.read_json("results/salience_results.json", lines=True)
 salience_df = salience_df[salience_df["against"] == "oracle"]
@@ -113,7 +105,7 @@ for weak_ds in weak_ds_list:
             if (stage["type"] == "weak" and num_weak > 0)
             or (stage["type"] == "oracle" and num_oracle > 0)
         ]
-        total_points = smallest_good_num_points * 2
+        total_points = smallest_good_num_points * 1
         for stage in stages:
             num = num_weak if stage["type"] == "weak" else num_oracle
             num_points = round(total_points * num / (num_weak + num_oracle))
@@ -121,8 +113,8 @@ for weak_ds in weak_ds_list:
             stage["size"] = num
             stage["num_train_epochs"] = num_epochs
 
-        seed = 4
-        run_name = f"nw={num_weak}_no={num_oracle}_seq_sft_s{seed}"
+        seed = 5
+        run_name = f"nw={num_weak}_no={num_oracle}_salience_cfg0_s{seed}"
         command = base_command.format(
             weak_ds_path=weak_ds_path,
             oracle_ds_path=oracle_ds_path,
