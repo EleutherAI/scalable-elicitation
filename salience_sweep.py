@@ -5,6 +5,8 @@ base_command = (
     "python salience.py "
     "{weak_ds_path} "
     "6000 400 "
+    "--strong_model_name {strong_model_name} "
+    "--seed {seed} "
     "--eval_steps 10 "
     "--save_steps 10 "
     "--num_train_epochs 1 "
@@ -30,8 +32,21 @@ weak_ds_paths += [
         "gt_amplified",
     ]
 ]
+strong_model_names = [
+    "meta-llama/Meta-Llama-3-8B",
+    "Qwen/Qwen1.5-0.5B",
+    "Qwen/Qwen1.5-4B",
+    "Qwen/Qwen1.5-7B",
+]
+seeds = range(3)
 for weak_ds_path in weak_ds_paths:
-    cmd = base_command.format(weak_ds_path=weak_ds_path)
-    print(cmd)
-    cmd += " --use_weak_label "
-    print(cmd)
+    for strong_model_name in strong_model_names:
+        for seed in seeds:
+            cmd = base_command.format(
+                weak_ds_path=weak_ds_path,
+                strong_model_name=strong_model_name,
+                seed=seed,
+            )
+            print(cmd)
+            cmd += " --use_weak_label "
+            print(cmd)

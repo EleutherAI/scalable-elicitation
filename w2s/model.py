@@ -198,7 +198,7 @@ class Predictor(torch.nn.Module, ABC):
 
 class TransformerPredictor(Predictor):
     cfg: ModelConfig
-    
+
     def __init__(self, cfg: ModelConfig):
         super().__init__(cfg)
         self.transformer, self.tokenizer = init_model_and_tokenizer(cfg)
@@ -262,6 +262,14 @@ MODEL_REGISTRY = {
     },
     "Qwen/Qwen1.5-0.5B": {
         "lr": 5e-4,
+        "lora_modules": DEFAULT_LORA_MODULES,
+    },
+    "Qwen/Qwen1.5-4B": {
+        "lr": 2e-4,
+        "lora_modules": DEFAULT_LORA_MODULES,
+    },
+    "Qwen/Qwen1.5-7B": {
+        "lr": 8e-5,
         "lora_modules": DEFAULT_LORA_MODULES,
     },
 }
