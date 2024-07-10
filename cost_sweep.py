@@ -1,4 +1,5 @@
 import copy
+import os
 
 import pandas as pd
 
@@ -50,6 +51,7 @@ cfgs = {
     ],
 }
 
+root = "/mnt/ssd-1/alexm/w2s/results"
 salience_df = pd.read_json("results/salience_results_all_models.json", lines=True)
 salience_df = salience_df[salience_df["against"] == "oracle"]
 
@@ -70,7 +72,7 @@ weak_ds_list += [
     ]
 ]
 model_names = [
-    "meta-llama/Meta-Llama-3-8B",
+    # "meta-llama/Meta-Llama-3-8B",
     "Qwen/Qwen1.5-0.5B",
     "Qwen/Qwen1.5-4B",
     "Qwen/Qwen1.5-7B",
@@ -101,13 +103,13 @@ for model_name in model_names:
                 "--per_device_train_batch_size 1 "
                 "--per_device_eval_batch_size 3 "
                 "--gradient_accumulation_steps 32 "
-                f"--results_folder /mnt/ssd-1/alexm/w2s/results/{weak_ds} "
+                f"--results_folder {root}/{weak_ds} "
                 '--run_name "{run_name}" '
             )
 
-            weak_ds_path = f"/mnt/ssd-1/alexm/w2s/results/{weak_ds}/weak_train"
-            oracle_ds_path = f"/mnt/ssd-1/alexm/w2s/results/{weak_ds}/weak_train"
-            test_ds_path = f"/mnt/ssd-1/alexm/w2s/results/{weak_ds}/weak_test"
+            weak_ds_path = f"{root}/{weak_ds}/weak_train"
+            oracle_ds_path = f"{root}/{weak_ds}/weak_train"
+            test_ds_path = f"{root}/{weak_ds}/weak_test"
 
             def get_command(stages, num_weak, num_oracle):
                 stages = copy.deepcopy(stages)
@@ -127,7 +129,10 @@ for model_name in model_names:
                     stage["num_train_epochs"] = num_epochs
 
                 seed = 5
-                run_name = f"nw={num_weak}_no={num_oracle}_{sweep_name}_s{seed}"
+                model_last = model_name.split("/")[-1]
+                run_name = (
+                    f"nw={num_weak}_no={num_oracle}_m={model_last}_{sweep_name}_s{seed}"
+                )
                 command = base_command.format(
                     weak_ds_path=weak_ds_path,
                     oracle_ds_path=oracle_ds_path,
@@ -137,6 +142,10 @@ for model_name in model_names:
                     run_name=run_name,
                     model_name=model_name,
                 )
+
+                if os.path.exists(f"{root}/{weak_ds}/{run_name}/results.json"):
+                    raise ValueError(f"Results already exist for {run_name}")
+
                 for j, stage in enumerate(stages):
                     prefix = f"stage{j}_"
                     for key, value in stage.items():

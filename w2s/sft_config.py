@@ -3,7 +3,9 @@ from typing import Optional
 from w2s.model import MODEL_REGISTRY
 
 
-def set_default_args(args: dict, model_name: str, run_name: Optional[str] = None):
+def set_default_args(
+    args: dict, model_name: str, run_name: Optional[str] = None, seed: int = 42
+) -> dict:
     """Set default arguments for training a model."""
     # set defaults
     args["num_train_epochs"] = args.get("num_train_epochs", 1)
@@ -24,6 +26,7 @@ def set_default_args(args: dict, model_name: str, run_name: Optional[str] = None
     args["tf32"] = args.get("tf32", True)
     args["label_names"] = args.get("label_names", ["labels"])
     args["learning_rate"] = args.get("learning_rate", MODEL_REGISTRY[model_name]["lr"])
+    args["seed"] = args.get("seed", 0)
     if run_name is not None:
         args["run_name"] = run_name
     return args

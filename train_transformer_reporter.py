@@ -39,7 +39,7 @@ def train_reporter_on_transformer(
     torch.cuda.manual_seed_all(seed)
 
     reporter_args = set_default_args(
-        reporter_args, model_name=strong_model_name, run_name=run_name
+        reporter_args, model_name=strong_model_name, run_name=run_name, seed=seed
     )
 
     # default to parent / "results"

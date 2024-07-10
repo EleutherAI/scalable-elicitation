@@ -41,6 +41,7 @@ def train_reporter_on_transformer(
         train_args,
         model_name=strong_model_name,
         run_name=run_name,
+        seed=seed,
     )
 
     weak_ds_path = Path(weak_ds_path)
