@@ -14,7 +14,7 @@ from transformers import DataCollatorWithPadding, Trainer, TrainingArguments
 
 from w2s.metrics import roc_auc
 from w2s.model import Predictor, TransformerPredictor
-from w2s.sft import lm_sft, prepare_for_trainer
+from w2s.sft import is_sft_cached, lm_sft, prepare_for_trainer
 from w2s.sft_utils import get_gpu_mem_used
 from w2s.utils import (
     assert_type,
@@ -42,10 +42,16 @@ class Oracle:
         self.ids_labeled = list()
 
     def query_id(self, id: str) -> float:
+        """
+        Get an oracle label for a single id, and note that it has been queried.
+        """
         self.ids_labeled.append(id)
         return assert_type(float, self._df.loc[id]["soft_label"])
 
     def query_ids(self, ids: list) -> pd.DataFrame:
+        """
+        Get oracle labels for a list of ids, and note that they have been queried.
+        """
         self.ids_labeled.extend(ids)
         return self._df.loc[ids]
 
@@ -59,16 +65,10 @@ class Oracle:
 
 class Reporter(ABC):
     """
-    This reporter is underspecified in the sense that it has many different possible
-    generalization behaviors, represented by the discrete list of classifiers in
-    self.classifiers_. The disambiguate step then uses extra data to choose between them.
-    One could imagine disambiguating between a continuum of candidate classifiers that have
-    similar behavior, but this is not supported here, and would need to be approximated by
-    having a large number of candidate classifiers.
+    This is a reporter in the terminology of ELK
+    https://www.lesswrong.com/posts/qHCDysDnvhteW7kRd/arc-s-first-technical-report-eliciting-latent-knowledge
 
-    Takes a weakly-labeled dataset and a strong pretrained model,
-    and a desired number of candidate classifiers, and then fits candidate classifiers
-    and disambiguates between them.
+    It is a method of eliciting latent knowledge from a strong model. E.g. finetuning.
     """
 
     weak_ds: Dataset
@@ -88,7 +88,7 @@ class Reporter(ABC):
         """
         weak_ds: a dataset with columns ["id", input_col, "soft_pred"]
         oracle: an Oracle object
-        strong_model: a
+        strong_model: the model to elicit latent knowledge from
         input_col: the column in weak_ds that contains the input
 
         """
@@ -116,7 +116,7 @@ class Reporter(ABC):
         ...
 
     def to_dict(self) -> dict[str, str | int | float]:
-        """A summary of the method that approximately uniquely identifies it.
+        """A summary of the reporter that approximately uniquely identifies it.
         It should include a name and all the important hyperparameters."""
         ...
 
@@ -132,6 +132,7 @@ class SftStage:
     ] = "random"
     n_test: int = 0
     weak_ids_used: list
+    oracle_ids_used: list
 
     def __init__(
         self,
@@ -217,7 +218,7 @@ class SftStage:
         if reporter.strong_model.cfg.enable_lora:
             # TODO: support models without `score` attribute
             lora_params = [
-                (*list(m.lora_A.parameters()), *list(m.lora_B.parameters()))
+                (*m.lora_A.parameters(), *m.lora_B.parameters())
                 for m in reporter.strong_model.transformer.modules()
                 if isinstance(m, LoraLayer)
             ]
@@ -231,12 +232,7 @@ class SftStage:
                 reporter.strong_model.transformer.score.requires_grad_()
             elif self.modules_with_grad == "body":
                 for p in lora_params:
-                    if p.dtype not in {
-                        torch.bfloat16,
-                        torch.float16,
-                        torch.float32,
-                        torch.float64,
-                    }:
+                    if not p.is_floating_point():
                         print(f"Skipping parameter {p} with dtype {p.dtype}")
                     p.requires_grad_()
                 reporter.strong_model.transformer.score.requires_grad_(False)
@@ -249,17 +245,17 @@ class SftStage:
             score_data = reporter.strong_model.transformer.score.weight.data
             score_data.normal_(0, 0.01 / score_data.shape[-1] ** 0.5)
 
-        save_dir = Path(self.train_args["output_dir"])
-        results_path = save_dir / "config.json"
         # we temporarily change the sampling method to avoid doing
         # inference for cached training run data selection
+        # since the trained model is cached we don't actually use the sampled data
         actual_sampling = self.sampling
-        if results_path.exists() and (save_dir / "best-ckpt").exists():
+
+        if is_sft_cached(self.train_args["output_dir"]):
             self.sampling = "random"
         ds_dict = self.get_dataset(
             reporter.oracle, reporter.weak_ds, reporter.test_ds, reporter
         )
-        if results_path.exists() and (save_dir / "best-ckpt").exists():
+        if is_sft_cached(self.train_args["output_dir"]):
             self.sampling = actual_sampling
         train_args = self.train_args.copy()
 
@@ -284,6 +280,8 @@ class SftStage:
 
     def to_dict(self) -> dict:
         d = vars(self)
+        del d["weak_ids_used"]
+        del d["oracle_ids_used"]
         d["num_weak"] = len(set(self.weak_ids_used))
         d["num_oracle"] = len(set(self.oracle_ids_used))
         d["num_weak_nonunique"] = len(self.weak_ids_used)
@@ -312,7 +310,7 @@ class ModularSftReporter(Reporter):
     def fit(self) -> ModularSftReporter:
         optimizer_checkpoint = None
         for i, stage_config in enumerate(self.stages):
-            print(f"\n\033[32m [Stage {i}] \033[0m")
+            print(f"\n\033[32m [Stage {i}] \033[0m")  # green text
             optimizer_checkpoint = stage_config.run(self, optimizer_checkpoint)
 
         return self

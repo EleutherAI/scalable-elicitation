@@ -6,8 +6,6 @@ import torch
 from datasets import Dataset, DatasetDict
 from transformers import (
     DataCollatorWithPadding,
-    PreTrainedModel,
-    PreTrainedTokenizer,
     Trainer,
     TrainingArguments,
 )
@@ -18,11 +16,17 @@ from w2s.sft_utils import (
     assert_type,
     clear_mem,
     compute_acc_and_auroc,
+    delete_all_ckpts,
     gather_hiddens,
     get_gpu_mem_used,
     move_best_ckpt,
-    delete_all_ckpts
 )
+
+
+def is_sft_cached(output_dir: Union[str, Path]) -> bool:
+    save_path = Path(output_dir)
+    results_path = save_path / "config.json"
+    return results_path.exists() and (save_path / "best-ckpt").exists()
 
 
 def prepare_for_trainer(
@@ -93,7 +97,8 @@ def lm_sft(
         args=train_args,
         compute_metrics=compute_acc_and_auroc,
         data_collator=DataCollatorWithPadding(
-            tokenizer, padding="longest",
+            tokenizer,
+            padding="longest",
         ),  # NOTE: this could mess up some datasets
         eval_dataset={
             k: ds_dict[k] for k in {"val", "test"}.intersection(ds_dict.keys())
@@ -104,7 +109,7 @@ def lm_sft(
     )
 
     results_path = save_dir / "config.json"
-    if results_path.exists() and (save_dir / "best-ckpt").exists():
+    if is_sft_cached(train_args.output_dir):
         print(
             f"Results for sft run already exist at {results_path}. "
             "Skipping training and evaluation. Loading the saved model."

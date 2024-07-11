@@ -38,7 +38,9 @@ def train_and_eval_reporter(
     if curr_results_path.exists():
         print(f"Results for queries already exist at {curr_results_path}.")
 
-    print("\n\033[32m===== Training reporter with oracle queries =====\033[0m")
+    print(
+        "\n\033[32m===== Training reporter with oracle queries =====\033[0m"
+    )  # green text
     # load a new predictor each time, since the weights
     # are often changed by the reporter
     clear_mem()

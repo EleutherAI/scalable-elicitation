@@ -24,7 +24,7 @@ def main(
     source_ds = load_and_process_dataset(ds_name, n_train, n_val, n_test, 0)
 
     # train weak floor, save predictions on train and test
-    print("\n\033[32m===== Training {model_name} =====\033[0m")
+    print("\n\033[32m===== Training {model_name} =====\033[0m")  # green text
     mc = ModelConfig(model_name, not disable_lora)
     model = TransformerPredictor(mc)
     train_args["output_dir"] = results_folder

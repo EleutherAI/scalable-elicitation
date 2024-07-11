@@ -96,12 +96,7 @@ def clear_mem(verbose: bool = False):
     if verbose:
 
         def try_attr(x, a):
-            try:
-                return getattr(x, a)
-            except Exception:
-                # amazing that this can cause...
-                # (AttributeError, OSError, AssertionError, RuntimeError, ModuleNotFoundError)
-                return None
+            return getattr(x, a, None)
 
         for obj in gc.get_objects():
             if torch.is_tensor(obj) or torch.is_tensor(try_attr(obj, "data")):

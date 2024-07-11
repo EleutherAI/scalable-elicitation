@@ -1,6 +1,6 @@
 import hashlib
 from pathlib import Path
-from typing import Union, Literal
+from typing import Literal, Union
 
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_from_disk
 from fire import Fire
@@ -24,7 +24,9 @@ def add_idx_col(ds: Union[DatasetDict, Dataset]) -> Union[DatasetDict, Dataset]:
 
 
 def main(
-    prompt: Literal["weak_amplified", "both_amplified", "neither_amplified", "gt_amplified"],
+    prompt: Literal[
+        "weak_amplified", "both_amplified", "neither_amplified", "gt_amplified"
+    ],
     model_name: str = "Qwen/Qwen1.5-0.5B",
     n_train: int = 2_000,
     n_val: int = 500,
@@ -51,8 +53,10 @@ def main(
 
     if remove_mislabeled_model:
         # train strong with good prompt, then remove examples where it disagrees with the "gt" label
-        print("\n\033[32m===== Training strong model =====\033[0m")
-        mc = ModelConfig(remove_mislabeled_model, not disable_lora, TransformerPredictor)
+        print("\n\033[32m===== Training strong model =====\033[0m")  # green text
+        mc = ModelConfig(
+            remove_mislabeled_model, not disable_lora, TransformerPredictor
+        )
         model = mc.initialize_model()
         denoise_args = train_args.copy()
         denoise_args["output_dir"] = Path(results_folder) / "remove_mislabeled"
@@ -110,7 +114,7 @@ def main(
             source_ds[split] = source_ds[split].select(idxs)
 
     # train weak floor, save predictions on train and test
-    print(f"\n\033[32m===== Training {model_name} =====\033[0m")
+    print(f"\n\033[32m===== Training {model_name} =====\033[0m")  # green text
     mc = ModelConfig(model_name, not disable_lora, TransformerPredictor)
     model = mc.initialize_model()
     train_args["output_dir"] = results_folder
