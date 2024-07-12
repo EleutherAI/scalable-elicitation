@@ -45,6 +45,7 @@ cfgs = {
                 "modules_with_grad": "all",
                 "type": "oracle",
                 "sampling": "random",
+                "num_warmup_steps": 0,
                 "reuse_optimizer_checkpoint": True,
             },
         ],

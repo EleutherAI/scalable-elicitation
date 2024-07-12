@@ -18,6 +18,10 @@ class CustomLossTrainer(Trainer):
         self.resume_from_optimizer_checkpoint = resume_from_optimizer_checkpoint
 
     def compute_loss(self, model, inputs, return_outputs=False):
+        """
+        This loss function does a hacky workaround to optionally
+        load in an Adam optimizer state at the start of training runs
+        """
         if (
             self.state.global_step == 0
             and self.resume_from_optimizer_checkpoint is not None
@@ -47,7 +51,7 @@ class CustomLossTrainer(Trainer):
 
         if self.state.global_step == 1 and self.optimizer is not None:
             state = self.optimizer.state[self.optimizer.param_groups[0]["params"][1]]
-            if "exp_avg" in state:
+            if "exp_avg" in state and state["exp_avg"].dtype != torch.float32:
                 print(f"Adam buffer dtype: {state['exp_avg'].dtype}")
 
         return self.compute_loss_custom(model, inputs, return_outputs)
@@ -64,9 +68,12 @@ class CustomLossTrainer(Trainer):
             raise ValueError(f"Unknown loss: {self.loss_name}")
 
         loss = log_confidence_loss(
-            outputs.logits, labels, self.state.global_step, aux_coef=aux_weight, subtract_label_ent=self.loss_name == "kl"
+            outputs.logits,
+            labels,
+            self.state.global_step,
+            aux_coef=aux_weight,
+            subtract_label_ent=self.loss_name == "kl",
         )
-            
 
         return (loss, outputs) if return_outputs else loss
 
@@ -194,6 +201,8 @@ def log_confidence_loss(
     target = labels_one_hot * (1 - coef) + strong_preds.detach() * coef
     loss = torch.nn.functional.cross_entropy(logits, target)
     if subtract_label_ent:
-        avg_label_ent = -torch.sum(labels_one_hot * torch.log(labels_one_hot + 1e-10), dim=1).mean()
+        avg_label_ent = -torch.sum(
+            labels_one_hot * torch.log(labels_one_hot + 1e-10), dim=1
+        ).mean()
         loss = loss - avg_label_ent
     return loss

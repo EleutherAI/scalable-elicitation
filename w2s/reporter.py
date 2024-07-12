@@ -279,7 +279,7 @@ class SftStage:
         return f"{train_args['output_dir']}/best-ckpt/optimizer.pt"
 
     def to_dict(self) -> dict:
-        d = vars(self)
+        d = vars(self).copy()
         del d["weak_ids_used"]
         del d["oracle_ids_used"]
         d["num_weak"] = len(set(self.weak_ids_used))

@@ -118,6 +118,7 @@ def main(
     mc = ModelConfig(model_name, not disable_lora, TransformerPredictor)
     model = mc.initialize_model()
     train_args["output_dir"] = results_folder
+    # we make sure to update the learning rate in case is was modified in the denoising run
     train_args["learning_rate"] = MODEL_REGISTRY[model_name]["lr"]
     ds_dict = DatasetDict(
         train=ds_with_labels(source_ds["train"]),
