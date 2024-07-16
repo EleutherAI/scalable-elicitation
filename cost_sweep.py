@@ -1,8 +1,6 @@
 import copy
 import os
 
-import pandas as pd
-
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
     "seq_sft_estop": [
@@ -26,7 +24,8 @@ cfgs = {
     ],
 }
 
-root = "/mnt/ssd-1/alexm/w2s/results"
+# root = "/mnt/ssd-1/alexm/w2s/results"
+root = "/home/fslcollab366/w2s/results"
 
 models = [
     "Qwen/Qwen1.5-0.5B",
@@ -34,10 +33,23 @@ models = [
     "Qwen/Qwen1.5-7B",
 ]
 ds_names = [
-    "boolq", "anli-r2", "ethics-virtue", "ethics-utilitarianism", "ethics-justice",
-    "hellaswag", "amazon_polarity", "ethics_deontology", "paws", "sciq_with_support"
+    "boolq",
+    "anli-r2",
+    "ethics-virtue",
+    "ethics-utilitarianism",
+    "ethics-justice",
+    "hellaswag",
+    "amazon_polarity",
+    "ethics_deontology",
+    "paws",
+    "sciq_with_support",
 ]
-weak_ds_list = [f"{ds_name}_{model_name.split('/')[-1]}" for ds_name in ds_names for model_name in models]
+weak_ds_list = [
+    f"{ds_name}_{model_name.split('/')[-1]}"
+    for ds_name in ds_names
+    for model_name in models
+]
+weak_ds_list += [f"{weak_ds}_shuffled_err" for weak_ds in weak_ds_list]
 weak_ds_list += [
     f"{ds_name}_{prompt}"
     for ds_name in [
@@ -63,7 +75,6 @@ strong_model_names = [
 for i, strong_model_name in enumerate(strong_model_names):
     for sweep_name, stages_list in cfgs.items():
         for weak_ds in weak_ds_list:
-
             skip = False
             for ii in range(i, len(strong_model_names)):
                 larger_model = strong_model_names[ii].split("/")[-1]
