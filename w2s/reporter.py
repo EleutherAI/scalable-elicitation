@@ -33,7 +33,7 @@ class Oracle:
         )
         assert "gt_soft_label" not in gt_dataset.column_names
 
-        self._df = gt_dataset.to_pandas()  # type: ignore
+        self._df = assert_type(pd.DataFrame, gt_dataset.to_pandas())
         self._df.set_index("id", inplace=True, drop=False)
         if "labels" in self._df.columns:
             self._df.drop(columns=["labels"], inplace=True)
@@ -141,6 +141,7 @@ class SftStage:
         sampling: Literal[
             "random", "most_confident_label", "least_confident_pred"
         ] = "random",
+        n_val: int = 0,
         n_test: int = 0,
         modules_with_grad: Literal["all", "head", "body"] = "all",
         reinit_head: bool = False,
@@ -151,6 +152,7 @@ class SftStage:
         self.type = type
         self.size = size
         self.sampling = sampling
+        self.n_val = n_val
         self.n_test = n_test
         self.modules_with_grad = modules_with_grad
         self.reinit_head = reinit_head
@@ -209,6 +211,14 @@ class SftStage:
             ds_dict["test"] = ds_with_labels(
                 test_ds.shuffle().select(range(self.n_test)), labels_column="soft_label"
             )
+        if self.train_args["load_best_model_at_end"]:
+            metric = self.train_args["metric_for_best_model"]
+            assert metric.startswith("val_") or metric.startswith("eval_val_")
+            assert self.n_val > 0
+            # TODO: allow for more configurations for early stopping dataset, such at using oracle
+            # for now we just split off a chunk of the train dataset
+            ds_dict["val"] = ds_dict["train"].select(range(self.n_val))
+            ds_dict["train"] = ds_dict["train"].select(range(self.n_val, len(ds_dict["train"])))
         return DatasetDict(**ds_dict)
 
     def run(

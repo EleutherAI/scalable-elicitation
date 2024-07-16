@@ -3,6 +3,7 @@ from typing import Union
 
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_from_disk
 from fire import Fire
+import torch
 from transformers import TrainingArguments
 
 from w2s.ds_registry import load_and_process_dataset
@@ -29,6 +30,7 @@ def main(
     n_val: int = 500,
     n_test: int = 5_000,
     n_predict: int = 50_000,
+    also_save_shuffled_error_labels: bool = False,
     results_folder=None,
     disable_lora: bool = False,
     **train_args,
@@ -40,11 +42,15 @@ def main(
     if results_folder is None:
         results_folder = str(Path(__file__).parent / f"results/{ds_name}_{model_last}")
 
+    if (Path(results_folder) / "weak_train").exists() and (Path(results_folder) / "weak_test").exists():
+        print(f"\033[33m===== Weak labels already exist for {results_folder} =====\033[0m")
+        return
+
     # load dataset
     source_ds = load_and_process_dataset(ds_name, n_train, n_val, n_test, n_predict)
 
     # train weak floor, save predictions on train and test
-    print(f"\n\033[32m===== Training {model_name} =====\033[0m")
+    print(f"\n\033[32m===== Training {model_name} =====\033[0m")  # green text
     mc = ModelConfig(model_name, not disable_lora, TransformerPredictor)
     model = mc.initialize_model()
     train_args["output_dir"] = results_folder
@@ -84,7 +90,7 @@ def main(
         predict_dict=predict_ds_dict,
     )
 
-    # read the predictions and replace the txt column
+    # read the predictions
     predict_dir = Path(results_folder) / "predictions"
     train_ds = load_from_disk(str(predict_dir / "train"))
     test_ds = load_from_disk(str(predict_dir / "test"))
@@ -92,6 +98,25 @@ def main(
     # save to disk
     train_ds.save_to_disk(str(Path(results_folder) / "weak_train"))
     test_ds.save_to_disk(str(Path(results_folder) / "weak_test"))
+
+    # Also to decrease salience of the errors I can "shuffle them around" 
+    # ie. take err = abs(weak - gold),
+    # then permute err, make a new weak label set with 
+    # weak_nonsalient = gold + np.where(gold, -shuffled_err, shuffled_err)
+    if also_save_shuffled_error_labels:
+        for name, ds in [("train", train_ds), ("test", test_ds)]:
+            ds = ds.with_format("torch")
+            err = (ds["soft_pred"] - ds["soft_label"]).abs()
+            shuffled_err = err.clone()
+            shuffled_err[torch.randperm(len(shuffled_err)), :] = err
+            ds = ds.remove_columns(["soft_pred"])
+            ds = ds.add_column("soft_pred", 
+                (ds["soft_label"] + torch.where(ds["soft_label"] > 0.5, -shuffled_err, shuffled_err)
+                 ).tolist())
+            ds = ds.with_format("python")
+            save_f = str(Path(results_folder + "_shuffled_err") / f"weak_{name}")
+            ds.save_to_disk(save_f)
+            print(f"Saving shuffled error labels to {save_f}")
 
 
 if __name__ == "__main__":

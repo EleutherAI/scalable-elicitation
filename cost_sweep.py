@@ -5,47 +5,21 @@ import pandas as pd
 
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
-    "salience_cfg0": [
-        [
-            {
-                "modules_with_grad": "head",
-                "type": "weak",
-                "sampling": "most_confident_label",
-                "sample_temp": 0.25,
-            },
-            {
-                "modules_with_grad": "all",
-                "type": "oracle",
-                "sampling": "least_confident_pred",
-                "sample_temp": 0.25,
-            },
-            {
-                "modules_with_grad": "all",
-                "reinit_head": True,
-                "type": "weak",
-                "sampling": "most_confident_label",
-                "sample_temp": 0.25,
-            },
-            {
-                "modules_with_grad": "all",
-                "type": "oracle",
-                "sampling": "least_confident_pred",
-                "sample_temp": 0.25,
-            },
-        ],
-    ],
-    "seq_sft": [
+    "seq_sft_estop": [
         [
             {
                 "modules_with_grad": "all",
                 "type": "weak",
                 "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
             },
             {
                 "modules_with_grad": "all",
                 "type": "oracle",
                 "sampling": "random",
-                "num_warmup_steps": 0,
+                "warmup_steps": 0,
                 "reuse_optimizer_checkpoint": True,
             },
         ],
@@ -53,10 +27,17 @@ cfgs = {
 }
 
 root = "/mnt/ssd-1/alexm/w2s/results"
-salience_df = pd.read_json("results/salience_results_all_models.json", lines=True)
-salience_df = salience_df[salience_df["against"] == "oracle"]
 
-weak_ds_list = ["boolq_Qwen1.5-0.5B"]
+models = [
+    "Qwen/Qwen1.5-0.5B",
+    "Qwen/Qwen1.5-4B",
+    "Qwen/Qwen1.5-7B",
+]
+ds_names = [
+    "boolq", "anli-r2", "ethics-virtue", "ethics-utilitarianism", "ethics-justice",
+    "hellaswag", "amazon_polarity", "ethics_deontology", "paws", "sciq_with_support"
+]
+weak_ds_list = [f"{ds_name}_{model_name.split('/')[-1]}" for ds_name in ds_names for model_name in models]
 weak_ds_list += [
     f"{ds_name}_{prompt}"
     for ds_name in [
@@ -72,21 +53,26 @@ weak_ds_list += [
         "gt_amplified",
     ]
 ]
-model_names = [
-    # "meta-llama/Meta-Llama-3-8B",
+strong_model_names = [
     "Qwen/Qwen1.5-0.5B",
     "Qwen/Qwen1.5-4B",
     "Qwen/Qwen1.5-7B",
+    "meta-llama/Meta-Llama-3-8B",
 ]
 
-for model_name in model_names:
+for i, strong_model_name in enumerate(strong_model_names):
     for sweep_name, stages_list in cfgs.items():
         for weak_ds in weak_ds_list:
-            curr_df = salience_df[
-                (salience_df["ds_name"] == weak_ds)
-                & (salience_df["model_name"] == model_name)
-            ]
-            smallest_good_num_points = round(curr_df["smallest_good_num_points"].mean())
+
+            skip = False
+            for ii in range(i, len(strong_model_names)):
+                larger_model = strong_model_names[ii].split("/")[-1]
+                if larger_model in weak_ds:
+                    # NOTE: this shouldn't be skipped for non-vanilla weak labels
+                    skip = True
+                    break
+            if skip:
+                continue
 
             base_command = (
                 "python train_transformer_reporter.py "
@@ -121,16 +107,19 @@ for model_name in model_names:
                     if (stage["type"] == "weak" and num_weak > 0)
                     or (stage["type"] == "oracle" and num_oracle > 0)
                 ]
-                total_points = smallest_good_num_points * 1
+                total_points = 20_000
                 for stage in stages:
                     num = num_weak if stage["type"] == "weak" else num_oracle
                     num_points = round(total_points * num / (num_weak + num_oracle))
                     num_epochs = max(num_points / num, 1)
                     stage["size"] = num
+                    if stage.get("load_best_model_at_end"):
+                        stage["n_val"] = int(num * stage["val_frac"])
+                        del stage["val_frac"]
                     stage["num_train_epochs"] = num_epochs
 
                 seed = 5
-                model_last = model_name.split("/")[-1]
+                model_last = strong_model_name.split("/")[-1]
                 run_name = (
                     f"nw={num_weak}_no={num_oracle}_m={model_last}_{sweep_name}_s{seed}"
                 )
@@ -141,7 +130,7 @@ for model_name in model_names:
                     seed=seed,
                     reporter_stages=len(stages),
                     run_name=run_name,
-                    model_name=model_name,
+                    model_name=strong_model_name,
                 )
 
                 if os.path.exists(f"{root}/{weak_ds}/{run_name}/results.json"):
@@ -158,57 +147,15 @@ for model_name in model_names:
 
                 return command
 
-            # pairs = [
-            #     (8000, 400),
-            #     (6000, 220),
-            #     (8000, 3000),
-            #     (50, 10),
-            #     (2, 70),
-            #     (2, 400),
-            #     (800, 8),
-            #     (450, 50),
-            #     (800, 20),
-            #     (3000, 300),
-            #     (2000, 130),
-            #     (1000, 25),
-            #     (800, 800),
-            #     (2500, 120),
-            #     (100, 500),
-            #     (400, 400),
-            #     (4000, 700),
-            #     (6000, 1000),
-            #     (100, 100),
-            #     (10, 100),
-            #     (800, 200),
-            #     (1000, 10),
-            #     (1000, 100),
-            #     (500, 100),
-            #     (6500, 2),
-            #     (7000, 10),
-            #     (6400, 20),
-            #     (7000, 100),
-            #     (6800, 300),
-            #     (6600, 2000),
-            #     (6800, 5000),
-            #     (1000, 5500),
-            #     (200, 700),
-            #     (1000, 4),
-            #     (5000, 20),
-            # ]
             pairs = [
-                # (2, 100),
-                # (2, 120),
-                # (2, 200),
                 (50, 10),
-                # (2, 70),
-                # (2, 400),
                 (800, 8),
                 (450, 50),
                 (800, 20),
-                # (3000, 300),
-                # (2000, 130),
+                (3000, 300),
+                (2000, 130),
                 (1000, 25),
-                # (100, 800),
+                (100, 800),
                 (2500, 120),
                 (100, 500),
                 # (400, 400),
@@ -231,7 +178,7 @@ for model_name in model_names:
                 # (7000, 100),
                 # (2, 7000),
                 # (2, 5000),
-                # (20, 7000),
+                (20, 7000),
                 (1000, 4),
                 (5000, 20),
             ]

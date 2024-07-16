@@ -116,50 +116,49 @@ def lm_sft(
         )
         trainer.state.best_model_checkpoint = str(save_dir / "best-ckpt")
         trainer._load_best_model()
-        wandb.finish()
-        return trainer
 
-    # store pre hiddens
-    if store_pre_hiddens:
-        print("Gathering hiddens")
-        hiddens = gather_hiddens(model, ds_dict["train"])
-        torch.save(hiddens, save_dir / "pre_hiddens.pt")
+    else:
+        # store pre hiddens
+        if store_pre_hiddens:
+            print("Gathering hiddens")
+            hiddens = gather_hiddens(model, ds_dict["train"])
+            torch.save(hiddens, save_dir / "pre_hiddens.pt")
 
-    # train
-    trainer.train()
+        # train
+        trainer.train()
 
-    # evaluate on test dataset
-    if "test" in ds_dict:
-        eval_results = trainer.evaluate(ds_dict["test"])  # type: ignore
+        # evaluate on test dataset
+        if "test" in ds_dict:
+            eval_results = trainer.evaluate(ds_dict["test"])  # type: ignore
 
-        # save results
-        with open(results_path, "w") as f:
-            json.dump(eval_results, f, indent=2)
-    move_best_ckpt(trainer)
+            # save results
+            with open(results_path, "w") as f:
+                json.dump(eval_results, f, indent=2)
+        move_best_ckpt(trainer)
 
-    # save config
-    with open(save_dir / "config.json", "w") as f:
-        cfg["train_args"] = train_args.to_dict()
-        json.dump(cfg, f, indent=2)
-    wandb.config.update(cfg)
+        # save config
+        with open(save_dir / "config.json", "w") as f:
+            cfg["train_args"] = train_args.to_dict()
+            json.dump(cfg, f, indent=2)
+        wandb.config.update(cfg)
 
     # save predictions
-    if predict_dict is not None:
+    if predict_dict is not None and not (save_dir / "predictions").exists():
         for name, predict_ds in predict_dict.items():
             if (save_dir / "predictions" / name).exists():
                 print(f"Predictions for {name} already exist. Skipping.")
                 continue
-            predict_ds = prepare_for_trainer(
-                predict_ds, tokenizer, discard_other_cols=False
+            ready_ds = prepare_for_trainer(
+                predict_ds, tokenizer, discard_other_cols=True
             )
             print("Gathering predictions for", name)
-            pred_logits = torch.from_numpy(trainer.predict(predict_ds).predictions)  # type: ignore
+            pred_logits = torch.from_numpy(trainer.predict(ready_ds).predictions)  # type: ignore
             preds = pred_logits.softmax(-1).tolist()
             pred_ds = predict_ds.add_column("soft_pred", preds)  # type: ignore
             pred_ds.save_to_disk(str(save_dir / "predictions" / name))
 
     # save hiddens
-    if store_post_hiddens:
+    if store_post_hiddens and not is_sft_cached(train_args.output_dir):
         print("Gathering hiddens")
         hiddens = gather_hiddens(model, ds_dict["train"])
         torch.save(hiddens, save_dir / "post_hiddens.pt")

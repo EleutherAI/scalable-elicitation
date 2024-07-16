@@ -1,5 +1,15 @@
+*.sh
+*cmds.txt
 results/
 wandb/
+misc.ipynb
+*-results/
+results*/
+project.csv
+prototyping.ipynb
+greenblatt_schemer/*
+!greenblatt_schemer/*.py
+.scheduler
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

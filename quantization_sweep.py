@@ -1,6 +1,6 @@
 models = [
     "meta-llama/Meta-Llama-3-8B",
-    "qwen/Qwen1.5-7B",
+    "Qwen/Qwen1.5-7B",
 ]
 seeds = [1, 2]
 ds_names = ["amazon_polarity", "boolq"]
