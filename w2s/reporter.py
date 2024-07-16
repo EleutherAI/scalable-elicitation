@@ -218,7 +218,11 @@ class SftStage:
             # TODO: allow for more configurations for early stopping dataset, such at using oracle
             # for now we just split off a chunk of the train dataset
             ds_dict["val"] = ds_dict["train"].select(range(self.n_val))
-            ds_dict["train"] = ds_dict["train"].select(range(self.n_val, len(ds_dict["train"])))
+            ds_dict["train"] = ds_dict["train"].select(
+                range(self.n_val, len(ds_dict["train"]))
+            )
+        else:
+            self.train_args["metric_for_best_model"] = None
         return DatasetDict(**ds_dict)
 
     def run(

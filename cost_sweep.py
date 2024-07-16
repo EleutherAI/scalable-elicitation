@@ -3,7 +3,7 @@ import os
 
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
-    "seq_sft_estop": [
+    "seq_sft_both_estop": [
         [
             {
                 "modules_with_grad": "all",
@@ -18,6 +18,8 @@ cfgs = {
                 "type": "oracle",
                 "sampling": "random",
                 "warmup_steps": 0,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
                 "reuse_optimizer_checkpoint": True,
             },
         ],
@@ -38,9 +40,9 @@ ds_names = [
     "ethics-virtue",
     "ethics-utilitarianism",
     "ethics-justice",
+    "ethics-deontology",
     "hellaswag",
     "amazon_polarity",
-    "ethics_deontology",
     "paws",
     "sciq_with_support",
 ]
