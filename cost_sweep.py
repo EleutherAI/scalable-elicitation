@@ -120,6 +120,9 @@ for i, strong_model_name in enumerate(strong_model_names):
                     if (stage["type"] == "weak" and num_weak > 0)
                     or (stage["type"] == "oracle" and num_oracle > 0)
                 ]
+                # make sure the first stage uses warmup
+                if stages[0].get("wamup_steps") == 0:
+                    stages[0]["warmup_steps"] = 40
                 total_points = 20_000
                 for stage in stages:
                     num = num_weak if stage["type"] == "weak" else num_oracle

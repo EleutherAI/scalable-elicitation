@@ -221,8 +221,6 @@ class SftStage:
             ds_dict["train"] = ds_dict["train"].select(
                 range(self.n_val, len(ds_dict["train"]))
             )
-        else:
-            self.train_args["metric_for_best_model"] = None
         return DatasetDict(**ds_dict)
 
     def run(
@@ -273,7 +271,7 @@ class SftStage:
             self.sampling = actual_sampling
         train_args = self.train_args.copy()
 
-        print(f"{get_gpu_mem_used()} before training")
+        print(f"{get_gpu_mem_used() * 100}% of all GPU mem in use before training")
 
         lm_sft(
             ds_dict=ds_dict,

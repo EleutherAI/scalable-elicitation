@@ -89,6 +89,8 @@ def lm_sft(
     print(f"{get_gpu_mem_used() * 100:.2f}% of all GPU memory in use before training")
 
     ds_dict = assert_type(DatasetDict, prepare_for_trainer(ds_dict, tokenizer))
+    if not train_args.load_best_model_at_end:
+        train_args.metric_for_best_model = None
 
     cls = DivDisTrainer if loss == "divdis" else CustomLossTrainer
     trainer = cls(
