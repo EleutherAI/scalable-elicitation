@@ -13,6 +13,7 @@ from transformers import (
 import wandb
 from w2s.loss import CustomLossTrainer, DivDisTrainer
 from w2s.sft_utils import (
+    EarlyStoppingCallback,
     assert_type,
     clear_mem,
     compute_acc_and_auroc,
@@ -91,6 +92,13 @@ def lm_sft(
     ds_dict = assert_type(DatasetDict, prepare_for_trainer(ds_dict, tokenizer))
     if not train_args.load_best_model_at_end:
         train_args.metric_for_best_model = None
+        callbacks = None
+    else:
+        callbacks = [
+            EarlyStoppingCallback(
+                early_stopping_patience=3, early_stopping_threshold=0.01
+            )
+        ]
 
     cls = DivDisTrainer if loss == "divdis" else CustomLossTrainer
     trainer = cls(
@@ -108,6 +116,7 @@ def lm_sft(
         model=model,
         tokenizer=tokenizer,
         train_dataset=ds_dict["train"],
+        callbacks=callbacks,
     )
 
     results_path = save_dir / "config.json"

@@ -1,5 +1,4 @@
 import copy
-import os
 
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
@@ -150,8 +149,8 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
                     model_name=strong_model_name,
                 )
 
-                if os.path.exists(f"{root}/{weak_ds}/{run_name}/results.json"):
-                    raise ValueError(f"Results already exist for {run_name}")
+                # if os.path.exists(f"{root}/{weak_ds}/{run_name}/results.json"):
+                #     raise ValueError(f"Results already exist for {run_name}")
 
                 for j, stage in enumerate(stages):
                     prefix = f"stage{j}_"
@@ -181,7 +180,7 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
             pairs += [
                 (0, num_oracle) for num_oracle in [10, 100, 300, 1000, 3000, 10_000]
             ]
-            pairs += [(num_weak, 0) for num_weak in [10, 100, 600, 3000, 10_000]]
+            # pairs += [(num_weak, 0) for num_weak in [10, 100, 600, 3000, 10_000]]
 
             # def generate_random_pair():
             #     choice = np.random.random()

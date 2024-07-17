@@ -1,12 +1,21 @@
 import gc
 import shutil
 from pathlib import Path
+from typing import Dict
 
 import pynvml
 import torch
 from datasets import Dataset
 from tqdm import tqdm
-from transformers import PretrainedConfig, Trainer
+from transformers import (
+    PretrainedConfig,
+    Trainer,
+    TrainerCallback,
+    TrainerControl,
+    TrainerState,
+    TrainingArguments,
+)
+from transformers.trainer_utils import EvaluationStrategy
 
 from w2s.metrics import roc_auc
 from w2s.utils import assert_type
@@ -116,3 +125,48 @@ def get_gpu_mem_used() -> float:
     finally:
         pynvml.nvmlShutdown()
     return prop_sum / num_devices
+
+
+class EarlyStoppingCallback(TrainerCallback):
+    """
+    This callback stops training upon the `early_stopping_patience`th consecutive
+    evaluation that fails to improve upon the best-yet metric value by at least
+    `early_stopping_threshold`.
+    """
+
+    def __init__(
+        self, early_stopping_patience: int = 3, early_stopping_threshold: float = 0.0
+    ):
+        self.early_stopping_patience = early_stopping_patience
+        self.early_stopping_threshold = early_stopping_threshold
+        self.early_stopping_patience_counter = 0
+        self.best_score = None
+
+    def check_metric_value(self, args, state, control, metric_value):
+        if self.best_score is None:
+            self.best_score = metric_value
+        elif (
+            state.global_step > 0 and args.evaluation_strategy != EvaluationStrategy.NO
+        ):
+            if metric_value < self.best_score + self.early_stopping_threshold:
+                self.early_stopping_patience_counter += 1
+                if self.early_stopping_patience_counter >= self.early_stopping_patience:
+                    control.should_training_stop = True
+            else:
+                self.best_score = metric_value
+                self.early_stopping_patience_counter = 0
+
+    def on_evaluate(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        metrics: Dict[str, float],
+        **kwargs,
+    ):
+        metric_to_check = args.metric_for_best_model
+        metric_value = metrics.get(metric_to_check)  # type: ignore
+
+        if metric_value:
+            metric_value = metric_value if args.greater_is_better else -metric_value
+            self.check_metric_value(args, state, control, metric_value)
