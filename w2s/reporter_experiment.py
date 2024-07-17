@@ -37,6 +37,7 @@ def train_and_eval_reporter(
     curr_results_path = Path(cfg.results_folder) / cfg.run_name / "results.json"
     if curr_results_path.exists():
         print(f"Results for queries already exist at {curr_results_path}.")
+        return
 
     print(
         "\n\033[32m===== Training reporter with oracle queries =====\033[0m"

@@ -26,25 +26,26 @@ cfgs = {
     ],
 }
 
-# root = "/mnt/ssd-1/alexm/w2s/results"
-root = "/home/fslcollab366/w2s/results"
+root = "/mnt/ssd-1/alexm/w2s/results"
+# root = "/home/fslcollab366/w2s/results"
 
 models = [
     "Qwen/Qwen1.5-0.5B",
-    "Qwen/Qwen1.5-4B",
-    "Qwen/Qwen1.5-7B",
+    # "Qwen/Qwen1.5-4B",
+    # "Qwen/Qwen1.5-7B",
 ]
 ds_names = [
     "boolq",
-    "anli-r2",
-    "ethics-virtue",
-    "ethics-utilitarianism",
-    "ethics-justice",
-    "ethics-deontology",
-    "hellaswag",
-    "amazon_polarity",
-    "paws",
-    "sciq_with_support",
+    # "anli-r2",
+    # "ethics-virtue",
+    # "ethics-utilitarianism",
+    # "ethics-justice",
+    # "ethics-deontology",
+    # "hellaswag",
+    # "amazon_polarity",
+    # "paws",
+    # "sciq_with_support",
+    # "sciq",
 ]
 weak_ds_list = [
     f"{ds_name}_{model_name.split('/')[-1]}"
@@ -52,21 +53,21 @@ weak_ds_list = [
     for model_name in models
 ]
 weak_ds_list += [f"{weak_ds}_shuffled_err" for weak_ds in weak_ds_list]
-weak_ds_list += [
-    f"{ds_name}_{prompt}"
-    for ds_name in [
-        "ethics_deontology_excuse_only",
-        "amazon_polarity_title_only",
-        "sciq_support_contains",
-        "paws_consistency",
-    ]
-    for prompt in [
-        "weak_amplified",
-        "both_amplified",
-        "neither_amplified",
-        "gt_amplified",
-    ]
-]
+# weak_ds_list += [
+#     f"{ds_name}_{prompt}"
+#     for ds_name in [
+#         "ethics_deontology_excuse_only",
+#         "amazon_polarity_title_only",
+#         "sciq_support_contains",
+#         "paws_consistency",
+#     ]
+#     for prompt in [
+#         "weak_amplified",
+#         "both_amplified",
+#         "neither_amplified",
+#         "gt_amplified",
+#     ]
+# ]
 strong_model_names = [
     "Qwen/Qwen1.5-0.5B",
     "Qwen/Qwen1.5-4B",
@@ -74,14 +75,14 @@ strong_model_names = [
     "meta-llama/Meta-Llama-3-8B",
 ]
 
-for i, strong_model_name in enumerate(strong_model_names):
+for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NOTE
     for sweep_name, stages_list in cfgs.items():
         for weak_ds in weak_ds_list:
             skip = False
             for ii in range(i, len(strong_model_names)):
                 larger_model = strong_model_names[ii].split("/")[-1]
                 if larger_model in weak_ds:
-                    # NOTE: this shouldn't be skipped for non-vanilla weak labels
+                    # NOTE: this shouldn't necessarily be skipped for non-vanilla weak labels
                     skip = True
                     break
             if skip:
@@ -121,7 +122,7 @@ for i, strong_model_name in enumerate(strong_model_names):
                     or (stage["type"] == "oracle" and num_oracle > 0)
                 ]
                 # make sure the first stage uses warmup
-                if stages[0].get("wamup_steps") == 0:
+                if stages[0].get("warmup_steps") == 0:
                     stages[0]["warmup_steps"] = 40
                 total_points = 20_000
                 for stage in stages:
@@ -164,44 +165,34 @@ for i, strong_model_name in enumerate(strong_model_names):
                 return command
 
             pairs = [
-                (50, 10),
-                (800, 8),
-                (450, 50),
-                (800, 20),
-                (3000, 300),
-                (2000, 130),
-                (1000, 25),
-                (100, 800),
-                (2500, 120),
-                (100, 500),
-                # (400, 400),
-                (4000, 700),
-                (6000, 1000),
-                (100, 100),
-                # (10, 100),
-                # (100, 1000),
-                (1000, 10),
-                (1000, 100),
-                (500, 100),
-                # (6500, 2),
-                (7000, 10),
-                # (6400, 20),
-                (7000, 100),
-                (6800, 300),
-                # (6600, 2000),
-                (6800, 5000),
-                (1000, 5500),
-                # (7000, 100),
-                # (2, 7000),
-                # (2, 5000),
-                (20, 7000),
-                (1000, 4),
-                (5000, 20),
+                # weak, oracle
+                (10, 0),
+                (0, 15),
+                (10, 10),
+                (0, 12),
+                (12, 0),
+                (15, 0),
+                (900, 900),
+                (900, 600),
+                (600, 900),
+                (10, 100),
+                (10, 15),
             ]
             pairs += [
                 (0, num_oracle) for num_oracle in [10, 100, 300, 1000, 3000, 10_000]
             ]
-            pairs += [(num_weak, 0) for num_weak in [100, 600, 3000, 10_000]]
+            pairs += [(num_weak, 0) for num_weak in [10, 100, 600, 3000, 10_000]]
+
+            # def generate_random_pair():
+            #     choice = np.random.random()
+            #     if choice < 0.25:
+            #         return (loguniform.rvs(1, 1e4) - 1, 0)
+            #     elif choice < 0.5:
+            #         return (0, loguniform.rvs(1, 1e4) - 1)
+            #     else:
+            #         return (loguniform.rvs(1, 1e4) - 1, loguniform.rvs(1, 1e4) - 1)
+
+            # pairs = [generate_random_pair() for _ in range(200)]
             for stages in stages_list:
                 for num_weak, num_oracle in pairs:
                     cmd = get_command(stages, num_weak, num_oracle)

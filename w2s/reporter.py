@@ -150,10 +150,10 @@ class SftStage:
         **kwargs,
     ):
         self.type = type
-        self.size = size
+        self.size = round(size)
         self.sampling = sampling
-        self.n_val = n_val
-        self.n_test = n_test
+        self.n_val = round(n_val)
+        self.n_test = round(n_test)
         self.modules_with_grad = modules_with_grad
         self.reinit_head = reinit_head
         self.sample_temp = sample_temp
