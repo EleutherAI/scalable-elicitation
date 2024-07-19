@@ -3,35 +3,33 @@ import copy
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
     "seq_sft_both_estop": [
-        [
-            {
-                "modules_with_grad": "all",
-                "type": "weak",
-                "sampling": "random",
-                "warmup_steps": 40,
-                "val_frac": 0.2,
-                "load_best_model_at_end": True,
-            },
-            {
-                "modules_with_grad": "all",
-                "type": "oracle",
-                "sampling": "random",
-                "warmup_steps": 0,
-                "val_frac": 0.2,
-                "load_best_model_at_end": True,
-                "reuse_optimizer_checkpoint": True,
-            },
-        ],
-    ],
+        {
+            "modules_with_grad": "all",
+            "type": "weak",
+            "sampling": "random",
+            "warmup_steps": 40,
+            "val_frac": 0.2,
+            "load_best_model_at_end": True,
+        },
+        {
+            "modules_with_grad": "all",
+            "type": "oracle",
+            "sampling": "random",
+            "warmup_steps": 0,
+            "val_frac": 0.2,
+            "load_best_model_at_end": True,
+            "reuse_optimizer_checkpoint": True,
+        },
+    ]
 }
 
 root = "/mnt/ssd-1/alexm/w2s/results"
 # root = "/home/fslcollab366/w2s/results"
 
-models = [
+weak_models = [
     "Qwen/Qwen1.5-0.5B",
-    # "Qwen/Qwen1.5-4B",
-    # "Qwen/Qwen1.5-7B",
+    "Qwen/Qwen1.5-4B",
+    "Qwen/Qwen1.5-7B",
 ]
 ds_names = [
     "boolq",
@@ -41,15 +39,15 @@ ds_names = [
     # "ethics-justice",
     # "ethics-deontology",
     # "hellaswag",
-    # "amazon_polarity",
+    "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    # "sciq",
+    "sciq",
 ]
 weak_ds_list = [
     f"{ds_name}_{model_name.split('/')[-1]}"
     for ds_name in ds_names
-    for model_name in models
+    for model_name in weak_models
 ]
 weak_ds_list += [f"{weak_ds}_shuffled_err" for weak_ds in weak_ds_list]
 # weak_ds_list += [
@@ -75,7 +73,7 @@ strong_model_names = [
 ]
 
 for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NOTE
-    for sweep_name, stages_list in cfgs.items():
+    for sweep_name, stages in cfgs.items():
         for weak_ds in weak_ds_list:
             skip = False
             for ii in range(i, len(strong_model_names)):
@@ -130,7 +128,7 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
                     num_epochs = max(num_points / num, 1)
                     stage["size"] = num
                     if stage.get("load_best_model_at_end"):
-                        stage["n_val"] = int(num * stage["val_frac"])
+                        stage["n_val"] = max(int(num * stage["val_frac"]), 2)
                         del stage["val_frac"]
                     stage["num_train_epochs"] = num_epochs
 
@@ -163,23 +161,25 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
 
                 return command
 
-            pairs = [
-                # weak, oracle
-                (10, 0),
-                (0, 15),
-                (10, 10),
-                (0, 12),
-                (12, 0),
-                (15, 0),
-                (900, 900),
-                (900, 600),
-                (600, 900),
-                (10, 100),
-                (10, 15),
-            ]
-            pairs += [
-                (0, num_oracle) for num_oracle in [10, 100, 300, 1000, 3000, 10_000]
-            ]
+            # pairs = [
+            #     # weak, oracle
+            #     (10, 0),
+            #     (0, 15),
+            #     (10, 10),
+            #     (0, 12),
+            #     (12, 0),
+            #     (15, 0),
+            #     (900, 900),
+            #     (900, 600),
+            #     (600, 900),
+            #     (10, 100),
+            #     (10, 15),
+            # ]
+            # pairs += [
+            #     (0, num_oracle) for num_oracle in [10, 100, 300, 1000, 3000, 10_000]
+            # ]
+            pairs = [(10**i - 1, 10**j - 1) for i in range(5) for j in range(5)]
+            pairs.remove((0, 0))
             # pairs += [(num_weak, 0) for num_weak in [10, 100, 600, 3000, 10_000]]
 
             # def generate_random_pair():
@@ -192,8 +192,7 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
             #         return (loguniform.rvs(1, 1e4) - 1, loguniform.rvs(1, 1e4) - 1)
 
             # pairs = [generate_random_pair() for _ in range(200)]
-            for stages in stages_list:
-                for num_weak, num_oracle in pairs:
-                    cmd = get_command(stages, num_weak, num_oracle)
-                    if cmd:
-                        print(cmd)
+            for num_weak, num_oracle in pairs:
+                cmd = get_command(stages, num_weak, num_oracle)
+                if cmd:
+                    print(cmd)

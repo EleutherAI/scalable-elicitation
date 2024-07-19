@@ -85,6 +85,9 @@ def lm_sft(
     It also optionally predicts on ds_dict["predict"] and saves the predictions.
     """
     save_dir = Path(train_args.output_dir)
+    train_args.run_name = (
+        train_args.run_name.replace("=", "_") if train_args.run_name else "default"
+    )
 
     clear_mem()
     print(f"{get_gpu_mem_used() * 100:.2f}% of all GPU memory in use before training")

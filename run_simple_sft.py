@@ -39,9 +39,7 @@ def main(
     model = mc.initialize_model()
     train_args["output_dir"] = results_folder
     ds_dict = DatasetDict(
-        train=ds_with_labels(source_ds["train"]),
-        val=ds_with_labels(source_ds["val"]),
-        test=ds_with_labels(source_ds["test"]),
+        **{k: ds_with_labels(ds) for k, ds in source_ds.items() if len(ds) > 0}
     )
 
     lm_sft(

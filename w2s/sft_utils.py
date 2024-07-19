@@ -53,28 +53,20 @@ def gather_hiddens(model: torch.nn.Module, dataset: Dataset):
 
 def move_best_ckpt(trainer: Trainer):
     checkpoints = list(Path(trainer.args.output_dir).glob("checkpoint-*"))
-    if not checkpoints:
+    path = trainer.state.best_model_checkpoint
+    if not checkpoints or path is None:
         print("No checkpoints found, saving final model")
         trainer.save_model(f"{trainer.args.output_dir}/best-ckpt")
         trainer._save_optimizer_and_scheduler(f"{trainer.args.output_dir}/best-ckpt")
         return
 
-    if not trainer.args.load_best_model_at_end or not checkpoints:
-        checkpoints = list(Path(trainer.args.output_dir).glob("checkpoint-*"))
-        # get the largest checkpoint
-        best_ckpt = max(checkpoints, key=lambda x: int(x.stem.split("-")[-1]))
-        best_ckpt.rename(Path(trainer.args.output_dir) / "best-ckpt")
-        return
-
-    path = trainer.state.best_model_checkpoint
     perf = trainer.state.best_metric
-    assert path is not None, "No best checkpoint found"
-    assert perf is not None, "No best metric"
+    if perf is not None:
+        print(f"Best model (auroc {perf:.3f}) saved at: {path}")
 
     src = Path(path)
     dest = src.parent / "best-ckpt"
     src.rename(dest)
-    print(f"Best model (auroc {perf:.3f}) saved at: {dest}")
 
 
 def delete_all_ckpts(trainer: Trainer):
