@@ -29,20 +29,20 @@ root = "/mnt/ssd-1/alexm/w2s/results"
 weak_models = [
     "Qwen/Qwen1.5-0.5B",
     "Qwen/Qwen1.5-4B",
-    "Qwen/Qwen1.5-7B",
+    # "Qwen/Qwen1.5-7B",
 ]
 ds_names = [
-    "boolq",
+    # "boolq",
     # "anli-r2",
-    # "ethics-virtue",
+    "ethics-virtue",
     # "ethics-utilitarianism",
     # "ethics-justice",
     # "ethics-deontology",
-    # "hellaswag",
-    "amazon_polarity",
+    "hellaswag",
+    # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    "sciq",
+    # "sciq",
 ]
 weak_ds_list = [
     f"{ds_name}_{model_name.split('/')[-1]}"

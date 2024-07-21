@@ -13,6 +13,7 @@ from transformers import (
 import wandb
 from w2s.loss import CustomLossTrainer, DivDisTrainer
 from w2s.sft_utils import (
+    AccuracyStoppingCallback,
     EarlyStoppingCallback,
     assert_type,
     clear_mem,
@@ -67,6 +68,7 @@ def lm_sft(
     predict_dict: Union[None, Dict, DatasetDict] = None,
     resume_from_checkpoint: Optional[str] = None,
     save: bool = True,
+    target_accuracy: float | None = None,
 ) -> Trainer:
     """
     ds_dict: DatasetDict with splits for train, val, test,
@@ -95,13 +97,15 @@ def lm_sft(
     ds_dict = assert_type(DatasetDict, prepare_for_trainer(ds_dict, tokenizer))
     if not train_args.load_best_model_at_end:
         train_args.metric_for_best_model = None
-        callbacks = None
+        callbacks = []
     else:
-        callbacks = [
+        callbacks: list = [
             EarlyStoppingCallback(
                 early_stopping_patience=3, early_stopping_threshold=0.01
             )
         ]
+    if target_accuracy is not None:
+        callbacks.append(AccuracyStoppingCallback(target_accuracy))
 
     cls = DivDisTrainer if loss == "divdis" else CustomLossTrainer
     trainer = cls(

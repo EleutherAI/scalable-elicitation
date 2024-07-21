@@ -162,3 +162,23 @@ class EarlyStoppingCallback(TrainerCallback):
         if metric_value:
             metric_value = metric_value if args.greater_is_better else -metric_value
             self.check_metric_value(args, state, control, metric_value)
+
+
+class AccuracyStoppingCallback(TrainerCallback):
+    """
+    This callback stops training as soon as val accuracy exceeds a threshold
+    """
+
+    def __init__(self, target_accuracy: float = 0.0):
+        self.target_accuracy = target_accuracy
+
+    def on_evaluate(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        metrics: Dict[str, float],
+        **kwargs,
+    ):
+        if metrics["eval_val_accuracy"] >= self.target_accuracy:
+            control.should_training_stop = True
