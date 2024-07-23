@@ -2,7 +2,7 @@ import copy
 
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
-    "seq_sft_both_estop": [
+    "w2s_then_lp_gt": [
         {
             "modules_with_grad": "all",
             "type": "weak",
@@ -12,15 +12,36 @@ cfgs = {
             "load_best_model_at_end": True,
         },
         {
-            "modules_with_grad": "all",
+            "modules_with_grad": "head",
             "type": "oracle",
             "sampling": "random",
-            "warmup_steps": 0,
-            "val_frac": 0.2,
-            "load_best_model_at_end": True,
-            "reuse_optimizer_checkpoint": True,
+            "warmup_steps": 40,
+            "per_device_train_batch_size": 8,
+            "gradient_accumulation_steps": 4,
+            "per_device_eval_batch_size": 8,
+            "load_best_model_at_end": False,
+            "reuse_optimizer_checkpoint": False,
         },
     ]
+    # "seq_sft_both_estop": [
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "weak",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #     },
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "oracle",
+    #         "sampling": "random",
+    #         "warmup_steps": 0,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #         "reuse_optimizer_checkpoint": True,
+    #     },
+    # ]
 }
 
 root = "/mnt/ssd-1/alexm/w2s/results"
@@ -28,13 +49,13 @@ root = "/mnt/ssd-1/alexm/w2s/results"
 
 weak_models = [
     "Qwen/Qwen1.5-0.5B",
-    "Qwen/Qwen1.5-4B",
+    # "Qwen/Qwen1.5-4B",
     # "Qwen/Qwen1.5-7B",
 ]
 ds_names = [
-    # "boolq",
+    "boolq",
     # "anli-r2",
-    "ethics-virtue",
+    # "ethics-virtue",
     # "ethics-utilitarianism",
     # "ethics-justice",
     # "ethics-deontology",
@@ -42,14 +63,19 @@ ds_names = [
     # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    # "sciq",
+    "sciq",
 ]
 weak_ds_list = [
-    f"{ds_name}_{model_name.split('/')[-1]}"
+    [
+        f"{ds_name}_{'Meta-Llama-3-8B'}_stopped_at_{model_name.split('/')[-1]}",
+        f"{ds_name}_{model_name.split('/')[-1]}",
+        f"{ds_name}_{model_name.split('/')[-1]}_shuffled_err",
+    ]
     for ds_name in ds_names
     for model_name in weak_models
 ]
-weak_ds_list += [f"{weak_ds}_shuffled_err" for weak_ds in weak_ds_list]
+weak_ds_list = [item for sublist in weak_ds_list for item in sublist]
+# weak_ds_list += [f"{weak_ds}_shuffled_err" for weak_ds in weak_ds_list]
 # weak_ds_list += [
 #     f"{ds_name}_{prompt}"
 #     for ds_name in [
@@ -75,15 +101,15 @@ strong_model_names = [
 for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NOTE
     for sweep_name, stages in cfgs.items():
         for weak_ds in weak_ds_list:
-            skip = False
-            for ii in range(i, len(strong_model_names)):
-                larger_model = strong_model_names[ii].split("/")[-1]
-                if larger_model in weak_ds:
-                    # NOTE: this shouldn't necessarily be skipped for non-vanilla weak labels
-                    skip = True
-                    break
-            if skip:
-                continue
+            # skip = False
+            # for ii in range(i, len(strong_model_names)):
+            #     larger_model = strong_model_names[ii].split("/")[-1]
+            #     if larger_model in weak_ds:
+            #         # NOTE: this shouldn't necessarily be skipped for non-vanilla weak labels
+            #         skip = True
+            #         break
+            # if skip:
+            #     continue
 
             base_command = (
                 "python train_transformer_reporter.py "
@@ -94,13 +120,12 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
                 "--seed {seed} "
                 "--strong_model_name {model_name} "
                 "--reporter_stages {reporter_stages} "
-                "--num_train_epochs 1 "
                 "--eval_steps 50 "
                 "--save_steps 50 "
                 "--save_total_limit 1 "
-                "--per_device_train_batch_size 1 "
+                "--per_device_train_batch_size 2 "
                 "--per_device_eval_batch_size 3 "
-                "--gradient_accumulation_steps 32 "
+                "--gradient_accumulation_steps 16 "
                 f"--results_folder {root}/{weak_ds} "
                 '--run_name "{run_name}" '
             )
@@ -121,7 +146,7 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
                 # make sure the first stage uses warmup
                 if stages[0].get("warmup_steps") == 0:
                     stages[0]["warmup_steps"] = 40
-                total_points = 20_000
+                total_points = 20_000  # total number of datapoints, including repetions over epochs
                 for stage in stages:
                     num = num_weak if stage["type"] == "weak" else num_oracle
                     num_points = round(total_points * num / (num_weak + num_oracle))
