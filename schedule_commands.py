@@ -22,6 +22,8 @@ time.sleep(args.delay_hours * 60 * 60)
 # File to store GPU usage state
 ROOT = ".scheduler"
 GPU_FILE_NAME_FORMAT = "gpu{gpu_id}_state_{process}.json"
+PROGRESS_FILE_NAME_FORMAT = "progress_{process}.json"
+
 process = min(
     [
         i
@@ -64,7 +66,16 @@ def is_gpu_in_use(gpu_index):
     return in_use
 
 
-def run_next_commands(gpu_index, commands: Queue, wait_sec=1):
+def write_progress_file(num_launched: int, of: int):
+    with open(Path(ROOT, PROGRESS_FILE_NAME_FORMAT.format(process=process)), "w") as f:
+        f.write(
+            json.dumps(
+                {"num_launched": num_launched, "of": of, "progress": num_launched / of}
+            )
+        )
+
+
+def run_next_commands(gpu_index, commands: Queue, finished_commands: Queue, wait_sec=1):
     while True:
         if commands.empty():
             print(f"No more commands to run on GPU {gpu_index}")
@@ -74,13 +85,18 @@ def run_next_commands(gpu_index, commands: Queue, wait_sec=1):
             return
 
         if not is_gpu_in_use(gpu_index):
-            # Get the next command from the queue
+            # Pop the next command from the queue
             command = commands.get()
+            finished_commands.put(command)
             command = f"CUDA_VISIBLE_DEVICES={gpu_index} {command}"
 
             # Run the command as a subprocess
             try:
                 update_gpu_state(gpu_index, True)
+                write_progress_file(
+                    num_launched=finished_commands.qsize(),
+                    of=commands.qsize() + finished_commands.qsize(),
+                )
                 print(f"Running command: {command} on GPU {gpu_index}")
                 subprocess.run(command, shell=True, check=False)
             finally:
@@ -110,7 +126,9 @@ try:
     # Create and start a process for each GPU
     processes = []
     for gpu_id in gpu_ids:
-        process = Process(target=run_next_commands, args=(gpu_id, command_queue))
+        process = Process(
+            target=run_next_commands, args=(gpu_id, command_queue, Queue())
+        )
         processes.append(process)
         process.start()
 

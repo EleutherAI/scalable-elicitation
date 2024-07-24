@@ -122,15 +122,17 @@ class Reporter(ABC):
 
 
 class SftStage:
-    modules_with_grad: Literal["all", "head", "body"] = "all"
-    reinit_head: bool = False
+    modules_with_grad: Literal["all", "head", "body"]
+    reinit_head: bool
     train_args: dict
-    type: Literal["weak", "oracle"] = "weak"
-    size: int = 1000
-    sampling: Literal[
-        "random", "most_confident_label", "least_confident_pred"
-    ] = "random"
-    n_test: int = 0
+    type: Literal["weak", "oracle"]
+    size: int
+    n_val: int
+    n_test: int
+    sampling: Literal["random", "most_confident_label", "least_confident_pred"]
+    sample_temp: float
+    reuse_optimizer_checkpoint: bool
+    early_stopping_multiplier: float | None
     weak_ids_used: list
     oracle_ids_used: list
 
@@ -147,6 +149,7 @@ class SftStage:
         reinit_head: bool = False,
         sample_temp: float = 0.25,
         reuse_optimizer_checkpoint: bool = False,
+        early_stopping_multiplier: float | None = None,
         **kwargs,
     ):
         self.type = type
@@ -158,6 +161,7 @@ class SftStage:
         self.reinit_head = reinit_head
         self.sample_temp = sample_temp
         self.reuse_optimizer_checkpoint = bool(reuse_optimizer_checkpoint)
+        self.early_stopping_multiplier = early_stopping_multiplier
         self.train_args = kwargs
         self.weak_ids_used = []
         self.oracle_ids_used = []
@@ -286,6 +290,7 @@ class SftStage:
             resume_from_checkpoint=optimizer_checkpoint
             if self.reuse_optimizer_checkpoint
             else None,
+            early_stopping_multiplier=self.early_stopping_multiplier,
         )
 
         return f"{train_args['output_dir']}/best-ckpt/optimizer.pt"

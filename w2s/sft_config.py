@@ -21,7 +21,7 @@ def set_default_args(
     args["save_steps"] = args.get("save_steps", 50)
     args["logging_steps"] = args.get("logging_steps", 25)
     args["load_best_model_at_end"] = args.get("load_best_model_at_end", False)
-    args["metric_for_best_model"] = args.get("metric_for_best_model", "val_auroc")
+    args["metric_for_best_model"] = args.get("metric_for_best_model", "eval_val_auroc")
     args["save_total_limit"] = args.get("save_total_limit", 1)
     args["adam_beta2"] = args.get("adam_beta2", 0.95)
     args["tf32"] = args.get("tf32", True)

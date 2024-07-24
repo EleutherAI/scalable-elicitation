@@ -124,15 +124,24 @@ class EarlyStoppingCallback(TrainerCallback):
     This callback stops training upon the `early_stopping_patience`th consecutive
     evaluation that fails to improve upon the best-yet metric value by at least
     `early_stopping_threshold`.
+
+    If `multiplier` is passed, it delays early stopping by that factor, so
+    training halts on step `multiplier * n` instead of step `n`.
     """
 
     def __init__(
-        self, early_stopping_patience: int = 3, early_stopping_threshold: float = 0.0
+        self,
+        early_stopping_patience: int = 4,
+        early_stopping_threshold: float = 0.01,
+        multiplier: float = 1.0,
     ):
+        assert multiplier >= 1
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_threshold = early_stopping_threshold
+        self.multiplier = multiplier
         self.early_stopping_patience_counter = 0
         self.best_score = None
+        self.stop_at = None
 
     def check_metric_value(self, args, state, control, metric_value):
         if self.best_score is None:
@@ -140,10 +149,13 @@ class EarlyStoppingCallback(TrainerCallback):
         elif (
             state.global_step > 0 and args.evaluation_strategy != EvaluationStrategy.NO
         ):
-            if metric_value < self.best_score + self.early_stopping_threshold:
+            if (
+                metric_value != metric_value
+                or metric_value < self.best_score + self.early_stopping_threshold
+            ):
                 self.early_stopping_patience_counter += 1
                 if self.early_stopping_patience_counter >= self.early_stopping_patience:
-                    control.should_training_stop = True
+                    self.stop_at = int(self.multiplier * state.global_step)
             else:
                 self.best_score = metric_value
                 self.early_stopping_patience_counter = 0
@@ -156,12 +168,21 @@ class EarlyStoppingCallback(TrainerCallback):
         metrics: Dict[str, float],
         **kwargs,
     ):
-        metric_to_check = args.metric_for_best_model
-        metric_value = metrics.get(metric_to_check)  # type: ignore
+        name = args.metric_for_best_model
+        if name is None:
+            print('No metric for best model found, defaulting to "eval_val_auroc"')
+            name = "eval_val_auroc"
+            args.metric_for_best_model = name
+            args.greater_is_better = True
+        name = name if name.startswith("eval_") else f"eval_{name}"
+        metric_value = metrics.get(name)  # type: ignore
 
-        if metric_value:
+        if metric_value and self.stop_at is None:
             metric_value = metric_value if args.greater_is_better else -metric_value
             self.check_metric_value(args, state, control, metric_value)
+
+        if state.global_step == self.stop_at:
+            control.should_training_stop = True
 
 
 class AccuracyStoppingCallback(TrainerCallback):

@@ -69,6 +69,7 @@ def lm_sft(
     resume_from_checkpoint: Optional[str] = None,
     save: bool = True,
     target_accuracy: float | None = None,
+    early_stopping_multiplier: float | None = None,
 ) -> Trainer:
     """
     ds_dict: DatasetDict with splits for train, val, test,
@@ -95,15 +96,18 @@ def lm_sft(
     print(f"{get_gpu_mem_used() * 100:.2f}% of all GPU memory in use before training")
 
     ds_dict = assert_type(DatasetDict, prepare_for_trainer(ds_dict, tokenizer))
-    if not train_args.load_best_model_at_end:
-        train_args.metric_for_best_model = None
-        callbacks = []
-    else:
+    if train_args.load_best_model_at_end or early_stopping_multiplier is not None:
         callbacks: list = [
             EarlyStoppingCallback(
-                early_stopping_patience=3, early_stopping_threshold=0.01
+                multiplier=early_stopping_multiplier
+                if early_stopping_multiplier is not None
+                else 1.0
             )
         ]
+    else:
+        train_args.metric_for_best_model = None
+        callbacks = []
+
     if target_accuracy is not None:
         callbacks.append(AccuracyStoppingCallback(target_accuracy))
 
