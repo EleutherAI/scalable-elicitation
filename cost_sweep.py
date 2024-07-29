@@ -1,4 +1,5 @@
 import copy
+import random
 
 import numpy as np
 
@@ -47,7 +48,47 @@ cfgs = {
     #         "reuse_optimizer_checkpoint": False,
     #     },
     # ],
-    "seq_sft_both_estop_clean": [
+    # "seq_sft_both_estop_clean": [
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "weak",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #     },
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "oracle",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #         "reuse_optimizer_checkpoint": False,
+    #     },
+    # ],
+    # "seq_sft_oracle_estop_2x": [
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "weak",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": False,
+    #         # go for 2x as long as your stopping criterion would tell you to do
+    #         "early_stopping_multiplier": 2,
+    #     },
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "oracle",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #         "reuse_optimizer_checkpoint": False,
+    #     },
+    # ],
+    "seq_sft_weak_estop_oracle_active_100steps": [
         {
             "modules_with_grad": "all",
             "type": "weak",
@@ -59,34 +100,54 @@ cfgs = {
         {
             "modules_with_grad": "all",
             "type": "oracle",
-            "sampling": "random",
+            "sampling": "least_confident_pred",
+            "sample_temp": 0.25,
             "warmup_steps": 40,
-            "val_frac": 0.2,
-            "load_best_model_at_end": True,
-            "reuse_optimizer_checkpoint": False,
-        },
-    ],
-    "seq_sft_oracle_estop_5x": [
-        {
-            "modules_with_grad": "all",
-            "type": "weak",
-            "sampling": "random",
-            "warmup_steps": 40,
-            "val_frac": 0.2,
             "load_best_model_at_end": False,
-            # go for 5x as long as your stopping criterion would tell you to do
-            "early_stopping_multiplier": 5,
-        },
-        {
-            "modules_with_grad": "all",
-            "type": "oracle",
-            "sampling": "random",
-            "warmup_steps": 40,
-            "val_frac": 0.2,
-            "load_best_model_at_end": True,
             "reuse_optimizer_checkpoint": False,
         },
     ],
+    # "seq_sft_both_estop_active_oracle": [
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "weak",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #     },
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "oracle",
+    #         "sampling": "least_confident_pred",
+    #         "sample_temp": 0.25,
+    #         "warmup_steps": 40,
+    #         "load_best_model_at_end": True,
+    #         "val_frac": 0.2,
+    #         "reuse_optimizer_checkpoint": False,
+    #     },
+    # ],
+    # "seq_sft_weak_estop_active_oracle_3x": [
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "weak",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #     },
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "oracle",
+    #         "sampling": "least_confident_pred",
+    #         "sample_temp": 0.25,
+    #         "warmup_steps": 40,
+    #         "load_best_model_at_end": False,
+    #         "reuse_optimizer_checkpoint": False,
+    #         "val_frac": 0.2,
+    #         "early_stopping_multiplier": 3,
+    #     },
+    # ],
 }
 
 root = "/mnt/ssd-1/alexm/w2s/results"
@@ -112,9 +173,9 @@ ds_names = [
 ]
 weak_ds_list = [
     [
-        f"{ds_name}_{'Meta-Llama-3-8B'}_stopped_at_{model_name.split('/')[-1]}",
+        # f"{ds_name}_{'Meta-Llama-3-8B'}_stopped_at_{model_name.split('/')[-1]}",
         f"{ds_name}_{model_name.split('/')[-1]}",
-        f"{ds_name}_{model_name.split('/')[-1]}_shuffled_err",
+        # f"{ds_name}_{model_name.split('/')[-1]}_shuffled_err",
     ]
     for ds_name in ds_names
     for model_name in weak_models
@@ -192,9 +253,12 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
                 # make sure the first stage uses warmup
                 if stages[0].get("warmup_steps") == 0:
                     stages[0]["warmup_steps"] = 40
-                total_points = 20_000  # total number of datapoints, including repetions over epochs
                 for stage in stages:
-                    num = num_weak if stage["type"] == "weak" else num_oracle
+                    is_weak = stage["type"] == "weak"
+                    total_points = (
+                        20_000 if is_weak else 100 * bs
+                    )  # total number of datapoints, including repetions over epochs
+                    num = num_weak if is_weak else num_oracle
                     num_epochs = max(total_points / num, 1)
                     stage["size"] = num
                     steps_per_epoch = int(np.ceil(stage["size"] / bs))
@@ -214,7 +278,7 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
                         del stage["val_frac"]
                     stage["num_train_epochs"] = num_epochs
 
-                seed = 5
+                seed = random.randint(0, 100)
                 model_last = strong_model_name.split("/")[-1]
                 run_name = (
                     f"nw={num_weak}_no={num_oracle}_m={model_last}_{sweep_name}_s{seed}"

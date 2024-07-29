@@ -46,6 +46,14 @@ def train_reporter_on_transformer(
 
     weak_ds_path = Path(weak_ds_path)
     train_args["output_dir"] = str(weak_ds_path / run_name)
+    # Check if output directory is not empty
+    output_dir = Path(train_args["output_dir"])
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise ValueError(
+            f"Output directory '{output_dir}' is not empty. "
+            "Please provide an empty directory or delete its contents."
+        )
+
     train_args["run_name"] = f"{weak_ds_path.name}_{run_name}"
 
     # load datasets

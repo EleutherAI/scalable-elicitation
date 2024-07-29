@@ -122,6 +122,11 @@ class Reporter(ABC):
 
 
 class SftStage:
+    """
+    The val set is included and the EarlyStoppingCallback is added if
+    args["load_best_model_at_end"] is True or early_stopping_multiplier is not None.
+    """
+
     modules_with_grad: Literal["all", "head", "body"]
     reinit_head: bool
     train_args: dict
@@ -139,7 +144,7 @@ class SftStage:
     def __init__(
         self,
         type: Literal["weak", "oracle"] = "weak",
-        size: int = 1000,
+        size: int = 1000,  # number of train + val examples
         sampling: Literal[
             "random", "most_confident_label", "least_confident_pred"
         ] = "random",
@@ -215,7 +220,10 @@ class SftStage:
             ds_dict["test"] = ds_with_labels(
                 test_ds.shuffle().select(range(self.n_test)), labels_column="soft_label"
             )
-        if self.train_args["load_best_model_at_end"]:
+        if (
+            self.train_args["load_best_model_at_end"]
+            or self.early_stopping_multiplier is not None
+        ):
             metric = self.train_args["metric_for_best_model"]
             assert metric.startswith("val_") or metric.startswith("eval_val_")
             assert self.n_val > 0
@@ -225,6 +233,11 @@ class SftStage:
             ds_dict["train"] = ds_dict["train"].select(
                 range(self.n_val, len(ds_dict["train"]))
             )
+        # print balance
+        train_labs = (torch.tensor(ds_dict["train"]["labels"]) > 0.5).float()
+        print(
+            f"Train labels balance: {train_labs.mean()} (n={len(train_labs)} {self.type})"
+        )
         return DatasetDict(**ds_dict)
 
     def run(

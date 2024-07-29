@@ -156,6 +156,11 @@ class EarlyStoppingCallback(TrainerCallback):
                 self.early_stopping_patience_counter += 1
                 if self.early_stopping_patience_counter >= self.early_stopping_patience:
                     self.stop_at = int(self.multiplier * state.global_step)
+                    if metric_value != metric_value:
+                        control.best_model_checkpoint = str(
+                            Path(args.output_dir) / f"checkpoint-{state.global_step}"
+                        )
+                        control.best_metric = metric_value
             else:
                 self.best_score = metric_value
                 self.early_stopping_patience_counter = 0

@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import subprocess
 import time
 from multiprocessing import Process, Queue
@@ -21,21 +22,26 @@ time.sleep(args.delay_hours * 60 * 60)
 
 # File to store GPU usage state
 ROOT = ".scheduler"
-GPU_FILE_NAME_FORMAT = "gpu{gpu_id}_state_{process}.json"
-PROGRESS_FILE_NAME_FORMAT = "progress_{process}.json"
+GPU_FILE_NAME_FORMAT = "gpu{gpu_id}_state_{process_id}.json"
+PROGRESS_FILE_NAME_FORMAT = "progress_{process_id}.json"
 
-process = min(
+process_id = min(
     [
         i
         for i in range(100_000)
         if not any(
-            Path(ROOT, GPU_FILE_NAME_FORMAT.format(gpu_id=gpu_id, process=i)).exists()
+            Path(
+                ROOT, GPU_FILE_NAME_FORMAT.format(gpu_id=gpu_id, process_id=i)
+            ).exists()
             for gpu_id in range(8)
         )
     ]
 )
+print(f"Process ID: {process_id}")
 GPU_STATE_FILES = {
-    gpu_id: Path(ROOT, GPU_FILE_NAME_FORMAT.format(gpu_id=gpu_id, process=process))
+    gpu_id: Path(
+        ROOT, GPU_FILE_NAME_FORMAT.format(gpu_id=gpu_id, process_id=process_id)
+    )
     for gpu_id in gpu_ids
 }
 
@@ -58,7 +64,7 @@ def update_gpu_state(gpu_index, in_use=True):
 def is_gpu_in_use(gpu_index):
     in_use = False
     for feature_file in Path(ROOT).glob(
-        GPU_FILE_NAME_FORMAT.format(gpu_id=gpu_index, process="*")
+        GPU_FILE_NAME_FORMAT.format(gpu_id=gpu_index, process_id="*")
     ):
         with open(feature_file, "r") as f:
             gpu_state = json.load(f)
@@ -67,7 +73,9 @@ def is_gpu_in_use(gpu_index):
 
 
 def write_progress_file(num_launched: int, of: int):
-    with open(Path(ROOT, PROGRESS_FILE_NAME_FORMAT.format(process=process)), "w") as f:
+    with open(
+        Path(ROOT, PROGRESS_FILE_NAME_FORMAT.format(process_id=process_id)), "w"
+    ) as f:
         f.write(
             json.dumps(
                 {"num_launched": num_launched, "of": of, "progress": num_launched / of}
@@ -146,3 +154,9 @@ finally:
     for gpu_state_file in GPU_STATE_FILES.values():
         if gpu_state_file.exists():
             gpu_state_file.unlink()
+
+    # Remove progress file if it exists
+    if os.path.exists(
+        Path(ROOT, PROGRESS_FILE_NAME_FORMAT.format(process_id=process_id))
+    ):
+        os.remove(Path(ROOT, PROGRESS_FILE_NAME_FORMAT.format(process_id=process_id)))
