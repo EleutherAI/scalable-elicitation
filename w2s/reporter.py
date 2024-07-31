@@ -134,6 +134,7 @@ class SftStage:
     size: int
     n_val: int
     n_test: int
+    loss: Literal["xent", "logconf"]
     sampling: Literal["random", "most_confident_label", "least_confident_pred"]
     sample_temp: float
     reuse_optimizer_checkpoint: bool
@@ -155,6 +156,7 @@ class SftStage:
         sample_temp: float = 0.25,
         reuse_optimizer_checkpoint: bool = False,
         early_stopping_multiplier: float | None = None,
+        loss: Literal["xent", "logconf"] = "xent",
         **kwargs,
     ):
         self.type = type
@@ -167,6 +169,7 @@ class SftStage:
         self.sample_temp = sample_temp
         self.reuse_optimizer_checkpoint = bool(reuse_optimizer_checkpoint)
         self.early_stopping_multiplier = early_stopping_multiplier
+        self.loss = loss
         self.train_args = kwargs
         self.weak_ids_used = []
         self.oracle_ids_used = []
@@ -295,7 +298,7 @@ class SftStage:
             model=reporter.strong_model.transformer,
             tokenizer=reporter.strong_model.tokenizer,
             train_args=TrainingArguments(**train_args),
-            loss="xent",
+            loss=self.loss,
             store_pre_hiddens=False,
             store_post_hiddens=False,
             cfg=reporter.to_dict(),
