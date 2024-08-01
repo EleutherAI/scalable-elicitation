@@ -87,7 +87,7 @@ def uncertainty_sample(
         weights**1 / temperature if temperature != 0 else torch.ones_like(weights)
     )
 
-    # get n_train random indices with replacement, weighted by p_correct
-    idxs = torch.multinomial(weights, n, replacement=True)
+    # get n random indices without replacement, weighted by p_correct
+    idxs = torch.multinomial(weights, n, replacement=False)
     idxs = idxs[torch.randperm(len(idxs))]
     return idxs

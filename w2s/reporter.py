@@ -185,7 +185,7 @@ class SftStage:
         label_col = "soft_pred" if self.type == "weak" else "soft_label"
 
         if self.sampling == "random":
-            idxs = random.choices(range(len(inputs)), k=self.size)  # with replacement
+            idxs = random.sample(range(len(inputs)), k=self.size)  # without replacement
         elif self.sampling == "least_confident_pred":
             print("Selecting examples with highest reporter entropy for training.")
             pred_logodds = reporter(inputs["txt"])  # type: ignore
@@ -217,6 +217,13 @@ class SftStage:
         else:
             train_ds = weak_ds.select(idxs)
             self.weak_ids_used.extend(train_ds["id"])
+
+        ids_used = self.weak_ids_used if self.type == "weak" else self.oracle_ids_used
+        if len(set(ids_used)) != self.size:
+            print(
+                f"WARNING: {self.type} stage requested {self.size} ids, "
+                f"but {len(ids_used)} unique ids were used"
+            )
 
         ds_dict = {"train": ds_with_labels(train_ds, labels_column=label_col)}
         if self.n_test > 0:

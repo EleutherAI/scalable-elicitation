@@ -48,26 +48,7 @@ cfgs = {
     #         "reuse_optimizer_checkpoint": False,
     #     },
     # ],
-    # "seq_sft_both_estop_clean": [
-    #     {
-    #         "modules_with_grad": "all",
-    #         "type": "weak",
-    #         "sampling": "random",
-    #         "warmup_steps": 40,
-    #         "val_frac": 0.2,
-    #         "load_best_model_at_end": True,
-    #     },
-    #     {
-    #         "modules_with_grad": "all",
-    #         "type": "oracle",
-    #         "sampling": "random",
-    #         "warmup_steps": 40,
-    #         "val_frac": 0.2,
-    #         "load_best_model_at_end": True,
-    #         "reuse_optimizer_checkpoint": False,
-    #     },
-    # ],
-    "seq_sft_both_estop_clean_logconf": [
+    "seq_sft_both_estop_clean": [
         {
             "modules_with_grad": "all",
             "type": "weak",
@@ -75,7 +56,6 @@ cfgs = {
             "warmup_steps": 40,
             "val_frac": 0.2,
             "load_best_model_at_end": True,
-            "loss": "logconf",
         },
         {
             "modules_with_grad": "all",
@@ -87,6 +67,26 @@ cfgs = {
             "reuse_optimizer_checkpoint": False,
         },
     ],
+    # "seq_sft_both_estop_clean_logconf": [
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "weak",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #         "loss": "logconf",
+    #     },
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "oracle",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #         "reuse_optimizer_checkpoint": False,
+    #     },
+    # ],
     # "seq_sft_oracle_estop_2x": [
     #     {
     #         "modules_with_grad": "all",
@@ -179,13 +179,13 @@ weak_models = [
     # "Qwen/Qwen1.5-7B",
 ]
 ds_names = [
-    "boolq",
+    # "boolq",
     # "anli-r2",
     # "ethics-virtue",
     # "ethics-utilitarianism",
     # "ethics-justice",
     # "ethics-deontology",
-    "hellaswag",
+    # "hellaswag",
     # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
@@ -193,9 +193,9 @@ ds_names = [
 ]
 weak_ds_list = [
     [
-        f"{ds_name}_{'Meta-Llama-3-8B'}_stopped_at_{model_name.split('/')[-1]}",
+        # f"{ds_name}_{'Meta-Llama-3-8B'}_stopped_at_{model_name.split('/')[-1]}",
         f"{ds_name}_{model_name.split('/')[-1]}",
-        f"{ds_name}_{model_name.split('/')[-1]}_shuffled_err",
+        # f"{ds_name}_{model_name.split('/')[-1]}_shuffled_err",
     ]
     for ds_name in ds_names
     for model_name in weak_models
@@ -218,26 +218,16 @@ weak_ds_list = [item for sublist in weak_ds_list for item in sublist]
 #     ]
 # ]
 strong_model_names = [
-    "Qwen/Qwen1.5-0.5B",
-    "Qwen/Qwen1.5-4B",
-    "Qwen/Qwen1.5-7B",
+    # "Qwen/Qwen1.5-0.5B",
+    # "Qwen/Qwen1.5-4B",
+    # "Qwen/Qwen1.5-7B",
     "meta-llama/Meta-Llama-3-8B",
 ]
 default_eval_every = 50
 bs, mbs = 32, 2
-for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NOTE
+for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
     for weak_ds in weak_ds_list:
         for sweep_name, stages in cfgs.items():
-            # skip = False
-            # for ii in range(i, len(strong_model_names)):
-            #     larger_model = strong_model_names[ii].split("/")[-1]
-            #     if larger_model in weak_ds:
-            #         # NOTE: this shouldn't necessarily be skipped for non-vanilla weak labels
-            #         skip = True
-            #         break
-            # if skip:
-            #     continue
-
             base_command = (
                 "python train_transformer_reporter.py "
                 "{weak_ds_path} "
@@ -328,25 +318,49 @@ for i, strong_model_name in list(enumerate(strong_model_names))[::-1][:1]:  # NO
 
                 return command
 
-            # pairs = [
-            #     # weak, oracle
-            #     (10, 0),
-            #     (0, 15),
-            #     (10, 10),
-            #     (0, 12),
-            #     (12, 0),
-            #     (15, 0),
-            #     (900, 900),
-            #     (900, 600),
-            #     (600, 900),
-            #     (10, 100),
-            #     (10, 15),
-            # ]
+            pairs = [
+                # weak, oracle
+                (3000, 2000),
+                (2000, 3000),
+                (999, 4000),
+                (250, 4750),
+                (0, 5000),
+                (999, 400),
+                (0, 500),
+                # (5000, 0),
+                # (4750, 250),
+                # (4000, 1000),
+                # (3000, 2000),
+                # (2000, 3000),
+                # (999, 4000),
+                # (250, 4750),
+                # (0, 5000),
+                # (4750, 25),
+                # (4000, 100),
+                # (3000, 200),
+                # (2000, 300),
+                # (999, 400),
+                # (250, 475),
+                # (0, 500),
+                # (4750, 2),
+                # (4000, 10),
+                # (3000, 20),
+                # (2000, 30),
+                # (999, 40),
+                # (250, 47),
+                # (0, 50),
+                # (4000, 1),
+                # (3000, 2),
+                # (2000, 3),
+                # (999, 4),
+                # (250, 4),
+                # (0, 5),
+            ]
             # pairs += [
             #     (0, num_oracle) for num_oracle in [10, 100, 300, 1000, 3000, 10_000]
             # ]
-            pairs = [(10**i - 1, 10**j - 1) for i in range(5) for j in range(5)]
-            pairs.remove((0, 0))
+            # pairs = [(10**i - 1, 10**j - 1) for i in range(5) for j in range(5)]
+            # pairs.remove((0, 0))
             # pairs += [(num_weak, 0) for num_weak in [10, 100, 600, 3000, 10_000]]
 
             # def generate_random_pair():
