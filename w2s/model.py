@@ -10,12 +10,11 @@ from peft import (
     prepare_model_for_kbit_training,
 )
 from transformers import (
+    AutoModelForCausalLM,
     AutoModelForSequenceClassification,
     AutoTokenizer,
     BitsAndBytesConfig,
 )
-
-from w2s.utils import assert_type
 
 # Works for Llama, Mistral, and Qwen architectures
 DEFAULT_LORA_MODULES = [
@@ -100,73 +99,6 @@ class MultiHeadAutoCastingScore(torch.nn.Module):
         ).to(self.output_dtype)
 
 
-def init_model_and_tokenizer(cfg: ModelConfig):
-    model = AutoModelForSequenceClassification.from_pretrained(
-        cfg.name,
-        device_map={"": "cuda"},
-        torch_dtype=torch.bfloat16,
-        quantization_config=BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-        )
-        if cfg.quantize
-        else None,
-        ignore_mismatched_sizes=True,
-    )
-    if cfg.quantize and cfg.enable_lora:
-        model = prepare_model_for_kbit_training(model)
-
-    if cfg.lora_modules is None and cfg.enable_lora:
-        cfg.lora_modules = MODEL_REGISTRY.get(cfg.name, {}).get(
-            "lora_modules", DEFAULT_LORA_MODULES
-        )
-
-    tokenizer = AutoTokenizer.from_pretrained(cfg.name, model_max_length=cfg.max_ctx)
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    model.config.pad_token_id = tokenizer.pad_token_id  # type: ignore
-    model.score.weight.data *= 0.01
-    model.config.problem_type = "single_label_classification"
-
-    if cfg.enable_lora:
-        lora_cfg = LoraConfig(
-            target_modules=cfg.lora_modules,
-            task_type=TaskType.SEQ_CLS,
-        )
-
-        # NOTE: adding task_type causes dtype errors, but is necessary for proper module saving
-        # and for making the lm head trainable, so we need to wrap it in an AutoCastingScore
-        for attr in ["score", "classifier"]:
-            if hasattr(model, attr):
-                score = (
-                    MultiHeadAutoCastingScore(
-                        getattr(model, attr),
-                        output_dtype=model.dtype,
-                        num_heads=cfg.num_heads,
-                    )
-                    if cfg.num_heads > 1
-                    else AutoCastingScore(
-                        getattr(model, attr), output_dtype=model.dtype
-                    )
-                )
-
-                setattr(model, attr, score)
-                break
-        else:
-            raise ValueError("Could not find classifier head in model.")
-        model = get_peft_model(model, lora_cfg)
-
-    # put all the trainable (e.g. LoRA) parameters in float32
-    for p in model.parameters():
-        if p.requires_grad:
-            p.data = p.data.float()
-
-    return model, tokenizer
-
-
 class Predictor(torch.nn.Module, ABC):
     """
     The strong "predictor", using the terminology of the original ELK report
@@ -201,40 +133,160 @@ class TransformerPredictor(Predictor):
 
     def __init__(self, cfg: ModelConfig):
         super().__init__(cfg)
-        self.transformer, self.tokenizer = init_model_and_tokenizer(cfg)
+
+        model = AutoModelForSequenceClassification.from_pretrained(
+            cfg.name,
+            device_map={"": "cuda"},
+            torch_dtype=torch.bfloat16,
+            quantization_config=BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+            )
+            if cfg.quantize
+            else None,
+            ignore_mismatched_sizes=True,
+        )
+        if cfg.quantize and cfg.enable_lora:
+            model = prepare_model_for_kbit_training(model)
+
+        if cfg.lora_modules is None and cfg.enable_lora:
+            cfg.lora_modules = MODEL_REGISTRY.get(cfg.name, {}).get(
+                "lora_modules", DEFAULT_LORA_MODULES
+            )
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            cfg.name, model_max_length=cfg.max_ctx
+        )
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model.config.pad_token_id = tokenizer.pad_token_id  # type: ignore
+        model.score.weight.data *= 0.01
+        model.config.problem_type = "single_label_classification"
+
+        if cfg.enable_lora:
+            lora_cfg = LoraConfig(
+                target_modules=cfg.lora_modules,
+                task_type=TaskType.SEQ_CLS,
+            )
+
+            # NOTE: adding task_type causes dtype errors, but is necessary for proper module saving
+            # and for making the lm head trainable, so we need to wrap it in an AutoCastingScore
+            for attr in ["score", "classifier"]:
+                if hasattr(model, attr):
+                    score = (
+                        MultiHeadAutoCastingScore(
+                            getattr(model, attr),
+                            output_dtype=model.dtype,
+                            num_heads=cfg.num_heads,
+                        )
+                        if cfg.num_heads > 1
+                        else AutoCastingScore(
+                            getattr(model, attr), output_dtype=model.dtype
+                        )
+                    )
+
+                    setattr(model, attr, score)
+                    break
+            else:
+                raise ValueError("Could not find classifier head in model.")
+            model = get_peft_model(model, lora_cfg)
+
+        # put all the trainable (e.g. LoRA) parameters in float32
+        for p in model.parameters():
+            if p.requires_grad:
+                p.data = p.data.float()
+
+        self.transformer = model
+        self.tokenizer = tokenizer
         self.cfg = cfg
 
-    def __call__(self, inputs, output_hidden_states=False):
-        # inputs are text strings
-        assert isinstance(inputs, list)
-        # ...ModelForSequenceClassification makes sure to score hiddens
-        # from the last non-padding token position
-        input_ids = assert_type(
-            torch.Tensor,
-            self.tokenizer(inputs, padding=True, truncation=True, return_tensors="pt")[
-                "input_ids"
-            ],
-        ).to(self.transformer.device)
+    # def __call__(self, inputs, output_hidden_states=False):
+    #     # inputs are text strings
+    #     assert isinstance(inputs, list)
+    #     # ...ModelForSequenceClassification makes sure to score hiddens
+    #     # from the last non-padding token position
+    #     input_ids = assert_type(
+    #         torch.Tensor,
+    #         self.tokenizer(inputs, padding=True, truncation=True, return_tensors="pt")[
+    #             "input_ids"
+    #         ],
+    #     ).to(self.transformer.device)
 
-        outputs = self.transformer(input_ids, output_hidden_states=True)
+    #     outputs = self.transformer(input_ids, output_hidden_states=True)
 
-        # gather hiddens at the last non-padding token position
-        hiddens = torch.stack(
-            outputs.hidden_states
-        )  # [num_layers, n, seq_len, hidden_size]
-        seq_lens = input_ids.ne(assert_type(int, self.tokenizer.pad_token_id)).sum(
-            dim=-1
-        )
-        last_non_pad_idx = seq_lens - 1
-        last_hidden_states = hiddens[:, torch.arange(len(inputs)), last_non_pad_idx, :]
+    #     # gather hiddens at the last non-padding token position
+    #     hiddens = torch.stack(
+    #         outputs.hidden_states
+    #     )  # [num_layers, n, seq_len, hidden_size]
+    #     seq_lens = input_ids.ne(assert_type(int, self.tokenizer.pad_token_id)).sum(
+    #         dim=-1
+    #     )
+    #     last_non_pad_idx = seq_lens - 1
+    #     last_hidden_states = hiddens[:, torch.arange(len(inputs)), last_non_pad_idx, :]
 
-        logodds = outputs.logits[:, 1] - outputs.logits[:, 0]
-        return (
-            (logodds, last_hidden_states.unbind(0)) if output_hidden_states else logodds
-        )
+    #     logodds = outputs.logits[:, 1] - outputs.logits[:, 0]
+    #     return (
+    #         (logodds, last_hidden_states.unbind(0)) if output_hidden_states else logodds
+    #     )
 
     def to_dict(self):
         return self.cfg.to_dict()
+
+
+class LMPredictor(Predictor):
+    cfg: ModelConfig
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__(cfg)
+
+        model = AutoModelForCausalLM.from_pretrained(
+            cfg.name,
+            device_map={"": "cuda"},
+            torch_dtype=torch.bfloat16,
+            quantization_config=BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+            )
+            if cfg.quantize
+            else None,
+            ignore_mismatched_sizes=True,
+        )
+        if cfg.quantize and cfg.enable_lora:
+            model = prepare_model_for_kbit_training(model)
+
+        if cfg.lora_modules is None and cfg.enable_lora:
+            cfg.lora_modules = MODEL_REGISTRY.get(cfg.name, {}).get(
+                "lora_modules", DEFAULT_LORA_MODULES
+            )
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            cfg.name, model_max_length=cfg.max_ctx
+        )
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model.config.pad_token_id = tokenizer.pad_token_id  # type: ignore
+
+        if cfg.enable_lora:
+            lora_cfg = LoraConfig(
+                target_modules=cfg.lora_modules,
+                task_type=TaskType.CAUSAL_LM,
+            )
+            model = get_peft_model(model, lora_cfg)
+
+        # put all the trainable (e.g. LoRA) parameters in float32
+        for p in model.parameters():
+            if p.requires_grad:
+                p.data = p.data.float()
+
+        self.transformer = model
+        self.tokenizer = tokenizer
+        self.cfg = cfg
 
 
 # TODO: make a legitimate model registry

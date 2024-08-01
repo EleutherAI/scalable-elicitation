@@ -74,7 +74,7 @@ def lm_sft(
     """
     ds_dict: DatasetDict with splits for train, val, test,
         with columns "txt" and "labels"
-    model: TransformerPredictor model
+    model: model for Sequence Classification
     train_args: TrainingArguments with the training hyperparameters
     loss: a string indicating the loss function to use
     store_pre_hiddens: whether to store the hiddens (all layers,

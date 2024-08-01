@@ -363,15 +363,6 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
             # pairs.remove((0, 0))
             # pairs += [(num_weak, 0) for num_weak in [10, 100, 600, 3000, 10_000]]
 
-            # def generate_random_pair():
-            #     choice = np.random.random()
-            #     if choice < 0.25:
-            #         return (loguniform.rvs(1, 1e4) - 1, 0)
-            #     elif choice < 0.5:
-            #         return (0, loguniform.rvs(1, 1e4) - 1)
-            #     else:
-            #         return (loguniform.rvs(1, 1e4) - 1, loguniform.rvs(1, 1e4) - 1)
-
             # pairs = [generate_random_pair() for _ in range(200)]
             for num_weak, num_oracle in pairs:
                 cmd = get_command(stages, num_weak, num_oracle)

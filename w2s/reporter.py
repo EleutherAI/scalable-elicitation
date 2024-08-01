@@ -10,10 +10,12 @@ import torch
 from datasets import Dataset, DatasetDict, concatenate_datasets
 from peft.tuners.lora.layer import LoraLayer
 from torch import nn, optim
+from tqdm import tqdm
 from transformers import DataCollatorWithPadding, Trainer, TrainingArguments
 
+from w2s.ds_registry import encode_choice
 from w2s.metrics import roc_auc
-from w2s.model import Predictor, TransformerPredictor
+from w2s.model import LMPredictor, Predictor, TransformerPredictor
 from w2s.sft import is_sft_cached, lm_sft, prepare_for_trainer
 from w2s.sft_utils import get_gpu_mem_used
 from w2s.utils import (
@@ -119,6 +121,106 @@ class Reporter(ABC):
         """A summary of the reporter that approximately uniquely identifies it.
         It should include a name and all the important hyperparameters."""
         ...
+
+
+class FewShotReporter(Reporter):
+    def __init__(
+        self,
+        num_weak: int,
+        num_oracle: int,
+        targets: tuple[str, str] = ("0", "1"),
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.num_weak = num_weak
+        self.num_oracle = num_oracle
+        self.weak_ids_used = []
+        self.oracle_ids_used = []
+        self.targets = targets
+        assert self.input_col == "txt", "FewShotReporter only supports input_col='txt'"
+        assert isinstance(self.strong_model, LMPredictor)
+
+    def get_dataset(self):
+        weak_ds = self.weak_ds.shuffle().select(range(self.num_weak))
+        self.weak_ids_used.extend(weak_ds["id"])
+        all_oracle_ids = (
+            self.oracle.get_inputs()["id"].values.tolist()
+            if len(self.oracle.get_inputs()) > 0
+            else []
+        )
+        ids = random.sample(all_oracle_ids, self.num_oracle)
+        oracle_ds = Dataset.from_pandas(
+            self.oracle.query_ids(ids), preserve_index=False
+        )
+        self.oracle_ids_used.extend(oracle_ds["id"])
+
+        return concatenate_datasets(
+            [
+                ds_with_labels(weak_ds, "soft_pred"),
+                ds_with_labels(oracle_ds, "soft_label"),
+            ]
+        ).shuffle()
+
+    @staticmethod
+    def make_few_shot_prefix(ds: Dataset, targets: tuple[str, str]):
+        """
+        ds should have a "txt" column and a "labels" column
+        """
+        assert "txt" in ds.column_names and "labels" in ds.column_names
+        assert all([isinstance(row["labels"], float) for row in ds])
+        if any([0 < row["labels"] < 1 for row in ds]):
+            print("WARNING: labels are not in {0, 1}, hardening for prompt")
+        prefix = "\n\n".join(
+            [f"{row['txt']}\n{targets[int(row['labels'] > 0.5)]}" for row in ds]
+        )
+        if prefix:
+            prefix += "\n\n"
+        return prefix
+
+    def fit(self):
+        self.ds = self.get_dataset()
+        print(
+            FewShotReporter.make_few_shot_prefix(self.ds.shuffle(), self.targets)
+        )  # TODO: remove
+        return self
+
+    def __call__(self, inputs: list[str]) -> torch.Tensor:
+        fs_prefix = FewShotReporter.make_few_shot_prefix(
+            self.ds.shuffle(), self.targets
+        )
+        if isinstance(inputs, str):
+            inputs = [inputs]
+
+        logodds = []
+        with torch.no_grad():
+            for txt in tqdm(inputs, desc="Few-shot inference", total=len(inputs)):
+                prompt = fs_prefix + txt + "\n"
+                encodings = self.strong_model.tokenizer(prompt, return_tensors="pt").to(
+                    self.strong_model.transformer.device
+                )
+                logits = self.strong_model.transformer(**encodings).logits.squeeze(0)
+
+                # Note that the LM's performance might be poorer if "\n" and "0" (target)
+                # are merged into a single "\n0" token in the few-shot prompt. For Llama's,
+                # GPT2's, and pythia's tokenizers, they are not merged, as desired.
+                target_toks = [
+                    encode_choice(self.targets[0], self.strong_model.tokenizer),
+                    encode_choice(self.targets[1], self.strong_model.tokenizer),
+                ]
+                target_logits = logits[encodings.input_ids.shape[1] - 1, target_toks]
+                logodds.append(target_logits.diff(dim=-1).item())
+        return torch.tensor(logodds)
+
+    def to_dict(self):
+        return {
+            "method": self.__class__.__name__,
+            "num_weak": len(set(self.weak_ids_used)),
+            "num_oracle": len(set(self.oracle_ids_used)),
+            "num_weak_nonunique": len(self.weak_ids_used),
+            "num_oracle_nonunique": len(self.oracle_ids_used),
+            "targets": self.targets,
+        }
 
 
 class SftStage:
@@ -360,6 +462,10 @@ class ModularSftReporter(Reporter):
             "method": self.__class__.__name__,
             "stages": [s.to_dict() for s in self.stages],
             "model": self.strong_model.to_dict(),
+            "num_weak": len(set.union(*(set(s.weak_ids_used) for s in self.stages))),
+            "num_weak_nonunique": sum(len(s.weak_ids_used) for s in self.stages),
+            "num_oracle": len(set(self.oracle.ids_labeled)),
+            "num_oracle_nonunique": len(self.oracle.ids_labeled),
         }
 
     def __call__(self, inputs: list) -> torch.Tensor:

@@ -65,6 +65,8 @@ def split_args_by_prefix(args: dict, prefixs: tuple) -> dict[str, dict]:
 def ds_with_labels(ds: Dataset, labels_column: str = "soft_label"):
     if "labels" in ds.column_names:
         ds = ds.remove_columns("labels")
+    if len(ds) == 0:
+        return ds.add_column("labels", torch.tensor([]))
     return ds.add_column(
         "labels", torch.as_tensor(ds[labels_column])[:, 1].tolist()
     )  # type: ignore

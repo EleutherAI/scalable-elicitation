@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,19 +10,18 @@ from datasets import Dataset
 
 from w2s.metrics import acc_ci, roc_auc_ci
 from w2s.model import ModelConfig
-from w2s.reporter import ModularSftReporter, Oracle
-from w2s.sft_utils import clear_mem, get_gpu_mem_used
+from w2s.reporter import Reporter
 
 
 @dataclass
 class ExperimentConfig:
-    stages: list
     results_folder: str = "./results"
     run_name: str = "default"
     input_col: str = "txt"
 
 
 def train_and_eval_reporter(
+    reporter: Reporter,
     # this dataset is cheap to query but may not have perfect labels
     weak_ds: Dataset,
     # this dataset is expensive to query but has perfect labels
@@ -34,30 +32,15 @@ def train_and_eval_reporter(
     cfg: ExperimentConfig,
     dataset_cfg_dict: dict,
 ):
-    curr_results_path = Path(cfg.results_folder) / cfg.run_name / "results.json"
-    if curr_results_path.exists():
-        print(f"Results for queries already exist at {curr_results_path}.")
+    save_path = Path(cfg.results_folder) / cfg.run_name
+    if (save_path / "results.json").exists():
+        print(f"Results for queries already exist at {save_path}.")
         return
+    os.makedirs(save_path, exist_ok=True)
 
     print(
         "\n\033[32m===== Training reporter with oracle queries =====\033[0m"
     )  # green text
-    # load a new predictor each time, since the weights
-    # are often changed by the reporter
-    clear_mem()
-    time.sleep(15)
-    get_gpu_mem_used()
-    strong_model = predictor_config.initialize_model()
-
-    # load reporter
-    reporter = ModularSftReporter(
-        weak_ds=weak_ds,
-        oracle=Oracle(oracle_ds),
-        test_ds=test_ds,
-        strong_model=strong_model,
-        stages=cfg.stages,
-        input_col=cfg.input_col,
-    )
 
     reporter.fit()
     with torch.no_grad():
@@ -94,18 +77,14 @@ def train_and_eval_reporter(
         "acc": float(acc_result.estimate),
         "acc_lo": float(acc_result.lower),
         "acc_hi": float(acc_result.upper),
-        "num_weak": len(set.union(*(set(s.weak_ids_used) for s in reporter.stages))),
-        "num_weak_nonunique": sum(len(s.weak_ids_used) for s in reporter.stages),
-        "num_oracle": len(set(reporter.oracle.ids_labeled)),
-        "num_oracle_nonunique": len(reporter.oracle.ids_labeled),
         **weak_results,
-        "stages": [s.to_dict() for s in reporter.stages],
         "oracle_ids": list(reporter.oracle.ids_labeled),
         "ids": test_ds["id"],
         "calibrated_logodds": cal_logodds.tolist(),
         "gt_soft_labels": gt_labels.tolist(),
+        "reporter": reporter.to_dict(),
     }
-    with open(curr_results_path, "w") as f:
+    with open(save_path / "results.json", "w") as f:
         json.dump(result, f, indent=2)
     print(
         {
@@ -122,7 +101,6 @@ def train_and_eval_reporter(
             ]
         }
     )
-    del strong_model
 
     # save configuration
     config: dict = {
@@ -130,8 +108,5 @@ def train_and_eval_reporter(
         "model": predictor_config.to_dict(),
         "reporter": reporter.to_dict(),
     }
-    save_path = Path(cfg.results_folder) / cfg.run_name
-
-    os.makedirs(save_path, exist_ok=True)
     with open(save_path / "config.json", "w") as f:
         json.dump(config, f, indent=2)
