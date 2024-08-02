@@ -37,7 +37,14 @@ def prepare_for_trainer(
     keep_cols = {"labels", "input_ids", "attention_mask"}
 
     def preprocess(exs):
-        out = tokenizer(exs["txt"], truncation=True)
+        out = tokenizer(
+            exs["txt"], truncation=True, max_length=tokenizer.model_max_length
+        )
+        if any(len(ids) == tokenizer.model_max_length for ids in out["input_ids"]):
+            raise ValueError(
+                "Text was truncated during tokenization."
+                " Increase max_length or use a different model."
+            )
         if discard_other_cols:
             return {k: v for k, v in out.items() if k in keep_cols}
         return out

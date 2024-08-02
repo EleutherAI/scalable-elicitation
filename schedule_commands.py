@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import time
+from datetime import datetime
 from multiprocessing import Process, Queue
 from pathlib import Path
 
@@ -15,6 +16,8 @@ args = parser.parse_args()
 cmds_file = args.cmds_file
 gpu_ids = list(map(int, args.gpu_ids.split(",")))
 print(gpu_ids)
+datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+print(datetime)
 # List of commands to execute
 commands = open(cmds_file).read().strip().split("\n")
 
@@ -22,6 +25,7 @@ time.sleep(args.delay_hours * 60 * 60)
 
 # File to store GPU usage state
 ROOT = ".scheduler"
+LOG_FORMAT = "logs/log_{datetime}_{gpu_id}.txt"
 GPU_FILE_NAME_FORMAT = "gpu{gpu_id}_state_{process_id}.json"
 PROGRESS_FILE_NAME_FORMAT = "progress_{process_id}.json"
 
@@ -61,14 +65,14 @@ def update_gpu_state(gpu_index, in_use=True):
         f.write(json.dumps(gpu_state))
 
 
-def is_gpu_in_use(gpu_index):
+def is_gpu_in_use(gpu_id):
     in_use = False
     for feature_file in Path(ROOT).glob(
-        GPU_FILE_NAME_FORMAT.format(gpu_id=gpu_index, process_id="*")
+        GPU_FILE_NAME_FORMAT.format(gpu_id=gpu_id, process_id="*")
     ):
         with open(feature_file, "r") as f:
             gpu_state = json.load(f)
-        in_use = in_use or gpu_state.get(str(gpu_index), False)
+        in_use = in_use or gpu_state.get(str(gpu_id), False)
     return in_use
 
 
@@ -83,32 +87,38 @@ def write_progress_file(num_launched: int, of: int):
         )
 
 
-def run_next_commands(gpu_index, commands: Queue, finished_commands: Queue, wait_sec=1):
+def run_next_commands(gpu_id, commands: Queue, finished_commands: Queue, wait_sec=1):
     while True:
         if commands.empty():
-            print(f"No more commands to run on GPU {gpu_index}")
+            print(f"No more commands to run on GPU {gpu_id}")
             if args.read_forever:
                 time.sleep(10)
                 continue
             return
 
-        if not is_gpu_in_use(gpu_index):
+        if not is_gpu_in_use(gpu_id):
             # Pop the next command from the queue
             command = commands.get()
             finished_commands.put(command)
-            command = f"CUDA_VISIBLE_DEVICES={gpu_index} {command}"
+            log_file = Path(ROOT) / LOG_FORMAT.format(datetime=datetime, gpu_id=gpu_id)
+            # Create the log file if it doesn't exist
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            log_file.touch(exist_ok=True)
+            with open(log_file, "a") as f:
+                f.write(f"Running command: {command} on GPU {gpu_id}\n")
+            command = f"CUDA_VISIBLE_DEVICES={gpu_id} {command} >> {log_file} 2>&1"
 
             # Run the command as a subprocess
             try:
-                update_gpu_state(gpu_index, True)
+                update_gpu_state(gpu_id, True)
                 write_progress_file(
                     num_launched=finished_commands.qsize(),
                     of=commands.qsize() + finished_commands.qsize(),
                 )
-                print(f"Running command: {command} on GPU {gpu_index}")
+                print(f"Running command: {command} on GPU {gpu_id}")
                 subprocess.run(command, shell=True, check=False)
             finally:
-                update_gpu_state(gpu_index, False)
+                update_gpu_state(gpu_id, False)
 
         time.sleep(wait_sec)
 

@@ -21,6 +21,7 @@ from w2s.sft_utils import get_gpu_mem_used
 from w2s.utils import (
     assert_type,
     ds_with_labels,
+    make_few_shot_prefix,
     uncertainty_sample,
 )
 
@@ -105,7 +106,7 @@ class Reporter(ABC):
         self.input_col = input_col
         self.save_dir = save_dir
 
-    def fit(self, max_queries: int) -> "Reporter":
+    def fit(self) -> "Reporter":
         """
         max_queries: the maximum number of queries to the oracle
         """
@@ -124,6 +125,8 @@ class Reporter(ABC):
 
 
 class FewShotReporter(Reporter):
+    strong_model: LMPredictor
+
     def __init__(
         self,
         num_weak: int,
@@ -162,33 +165,15 @@ class FewShotReporter(Reporter):
             ]
         ).shuffle()
 
-    @staticmethod
-    def make_few_shot_prefix(ds: Dataset, targets: tuple[str, str]):
-        """
-        ds should have a "txt" column and a "labels" column
-        """
-        assert "txt" in ds.column_names and "labels" in ds.column_names
-        assert all([isinstance(row["labels"], float) for row in ds])
-        if any([0 < row["labels"] < 1 for row in ds]):
-            print("WARNING: labels are not in {0, 1}, hardening for prompt")
-        prefix = "\n\n".join(
-            [f"{row['txt']}\n{targets[int(row['labels'] > 0.5)]}" for row in ds]
-        )
-        if prefix:
-            prefix += "\n\n"
-        return prefix
-
     def fit(self):
-        self.ds = self.get_dataset()
+        self.few_shot_ds = self.get_dataset()
         print(
-            FewShotReporter.make_few_shot_prefix(self.ds.shuffle(), self.targets)
+            make_few_shot_prefix(self.few_shot_ds.shuffle(), self.targets)
         )  # TODO: remove
         return self
 
     def __call__(self, inputs: list[str]) -> torch.Tensor:
-        fs_prefix = FewShotReporter.make_few_shot_prefix(
-            self.ds.shuffle(), self.targets
-        )
+        fs_prefix = make_few_shot_prefix(self.few_shot_ds.shuffle(), self.targets)
         if isinstance(inputs, str):
             inputs = [inputs]
 
@@ -219,6 +204,108 @@ class FewShotReporter(Reporter):
             "num_oracle": len(set(self.oracle_ids_used)),
             "num_weak_nonunique": len(self.weak_ids_used),
             "num_oracle_nonunique": len(self.oracle_ids_used),
+            "targets": self.targets,
+        }
+
+
+class FewShotPromptedSFTReporter(Reporter):
+    """
+    This reporter uses oracle labels in a few-shot prompt
+    and weak labels to train the classification model when given this
+    few-shot prompt
+    """
+
+    strong_model: TransformerPredictor
+
+    def __init__(
+        self,
+        num_oracle: int,
+        train_cfg: SftStage,
+        targets: tuple[str, str] = ("0", "1"),
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.num_oracle = num_oracle
+        self.weak_ids_used = []
+        self.oracle_ids_used = []
+        self.targets = targets
+        self.train_cfg = train_cfg
+        assert (
+            self.input_col == "txt"
+        ), "FewShotPromptedSFTReporter only supports input_col='txt'"
+        assert isinstance(self.strong_model, TransformerPredictor)
+        assert self.train_cfg.type == "weak"
+        self.few_shot_ds = self.get_few_shot_dataset()
+
+    def get_few_shot_dataset(self):
+        all_oracle_ids = (
+            self.oracle.get_inputs()["id"].values.tolist()
+            if len(self.oracle.get_inputs()) > 0
+            else []
+        )
+        ids = random.sample(all_oracle_ids, self.num_oracle)
+        oracle_ds = Dataset.from_pandas(
+            self.oracle.query_ids(ids), preserve_index=False
+        )
+        self.oracle_ids_used.extend(oracle_ds["id"])
+
+        return ds_with_labels(oracle_ds, "soft_label")
+
+    def prefix_weak_ds(self):
+        self.weak_ds = self.weak_ds.map(
+            lambda x: {
+                "txt": make_few_shot_prefix(self.few_shot_ds.shuffle(), self.targets)
+                + x["txt"]
+                + "\n"
+            }
+        )
+
+    def fit(self):
+        self.prefix_weak_ds()
+
+        print("\n\033[32m [Training on weak labels] \033[0m")  # green text
+        self.train_cfg.run(self, None)
+
+        return self
+
+    def __call__(self, inputs: list[str]) -> torch.Tensor:
+        """
+        Returns the logodds of the classifier's predictions
+        """
+        inputs = [
+            make_few_shot_prefix(self.few_shot_ds.shuffle(), self.targets) + x + "\n"
+            for x in inputs
+        ]
+        predict_ds = prepare_for_trainer(
+            Dataset.from_dict({self.input_col: inputs}), self.strong_model.tokenizer
+        )
+        # turn off wandb logging in trainer
+        targs = self.train_cfg.train_args.copy()
+        targs["report_to"] = "none"
+        targs["output_dir"] = "tmp"
+        targs["run_name"] = "tmp"
+        trainer = Trainer(
+            args=TrainingArguments(**targs),
+            data_collator=DataCollatorWithPadding(
+                self.strong_model.tokenizer,
+                max_length=self.strong_model.cfg.max_ctx,
+                padding="max_length",
+            ),  # NOTE: this could mess up some datasets
+            model=self.strong_model.transformer,
+            tokenizer=self.strong_model.tokenizer,
+        )
+        pred_logits = torch.from_numpy(trainer.predict(predict_ds).predictions)  # type: ignore # noqa
+        return pred_logits.diff(dim=-1).squeeze()
+
+    def to_dict(self):
+        return {
+            "method": self.__class__.__name__,
+            "num_weak": len(set(self.train_cfg.weak_ids_used)),
+            "num_oracle": len(set(self.oracle_ids_used)),
+            "num_weak_nonunique": len(self.train_cfg.weak_ids_used),
+            "num_oracle_nonunique": len(self.oracle_ids_used),
+            "train_cfg": self.train_cfg.to_dict(),
             "targets": self.targets,
         }
 
@@ -281,7 +368,7 @@ class SftStage:
         oracle: Oracle,
         weak_ds: Dataset,
         test_ds: Dataset,
-        reporter: ModularSftReporter,
+        reporter: ModularSftReporter | FewShotPromptedSFTReporter,
     ) -> DatasetDict:
         inputs = oracle.get_inputs() if self.type == "oracle" else weak_ds
         label_col = "soft_pred" if self.type == "weak" else "soft_label"
@@ -353,7 +440,9 @@ class SftStage:
         return DatasetDict(**ds_dict)
 
     def run(
-        self, reporter: ModularSftReporter, optimizer_checkpoint: Optional[str] = None
+        self,
+        reporter: ModularSftReporter | FewShotPromptedSFTReporter,
+        optimizer_checkpoint: Optional[str] = None,
     ) -> str:
         assert isinstance(reporter.strong_model, TransformerPredictor)
         if reporter.strong_model.cfg.enable_lora:
@@ -483,7 +572,9 @@ class ModularSftReporter(Reporter):
         trainer = Trainer(
             args=TrainingArguments(**targs),
             data_collator=DataCollatorWithPadding(
-                self.strong_model.tokenizer, max_length=1024, padding="max_length"
+                self.strong_model.tokenizer,
+                max_length=self.strong_model.cfg.max_ctx,
+                padding="max_length",
             ),  # NOTE: this could mess up some datasets
             model=self.strong_model.transformer,
             tokenizer=self.strong_model.tokenizer,
@@ -504,6 +595,7 @@ class DivDisSftReporter(Reporter):
     - Calibrate that head with Platt scaling
     """
 
+    strong_model: TransformerPredictor
     best_head: int
     bias = torch.nn.Parameter(torch.tensor(0.0))
     scale = torch.nn.Parameter(torch.tensor(1.0))
@@ -654,7 +746,9 @@ class DivDisSftReporter(Reporter):
         trainer = Trainer(
             args=TrainingArguments(**targs),
             data_collator=DataCollatorWithPadding(
-                self.strong_model.tokenizer, max_length=1024, padding="max_length"
+                self.strong_model.tokenizer,
+                max_length=self.strong_model.cfg.max_ctx,
+                padding="max_length",
             ),  # NOTE: this could mess up some datasets
             model=self.strong_model.transformer,
             tokenizer=self.strong_model.tokenizer,

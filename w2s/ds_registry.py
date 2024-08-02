@@ -201,7 +201,9 @@ def hf_loader(*hf_name, split_names=None, n_test=None):
         if split_names is None:
             split_names = dict()
 
-        return hf_load_dataset(*hf_name, split=split_names.get(split, split))
+        return hf_load_dataset(
+            *hf_name, split=split_names.get(split, split), trust_remote_code=True
+        )
 
     return thunk
 

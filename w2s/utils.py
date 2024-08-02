@@ -66,7 +66,7 @@ def ds_with_labels(ds: Dataset, labels_column: str = "soft_label"):
     if "labels" in ds.column_names:
         ds = ds.remove_columns("labels")
     if len(ds) == 0:
-        return ds.add_column("labels", torch.tensor([]))
+        return ds.add_column("labels", torch.tensor([]))  # type: ignore
     return ds.add_column(
         "labels", torch.as_tensor(ds[labels_column])[:, 1].tolist()
     )  # type: ignore
@@ -93,3 +93,19 @@ def uncertainty_sample(
     idxs = torch.multinomial(weights, n, replacement=False)
     idxs = idxs[torch.randperm(len(idxs))]
     return idxs
+
+
+def make_few_shot_prefix(ds: Dataset, targets: tuple[str, str]):
+    """
+    ds should have a "txt" column and a "labels" column
+    """
+    assert "txt" in ds.column_names and "labels" in ds.column_names
+    assert all([isinstance(row["labels"], float) for row in ds])  # type: ignore
+    if any([0 < row["labels"] < 1 for row in ds]):  # type: ignore
+        print("WARNING: labels are not in {0, 1}, hardening for prompt")
+    prefix = "\n\n".join(
+        [f"{row['txt']}\n{targets[int(row['labels'] > 0.5)]}" for row in ds]  # type: ignore
+    )
+    if prefix:
+        prefix += "\n\n"
+    return prefix
