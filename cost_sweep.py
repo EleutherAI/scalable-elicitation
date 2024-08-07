@@ -1,5 +1,4 @@
 import copy
-import random
 
 import numpy as np
 
@@ -48,7 +47,7 @@ cfgs = {
     #         "reuse_optimizer_checkpoint": False,
     #     },
     # ],
-    "seq_sft_both_estop_clean": [
+    "seq_sft_both_estop_clean_disjoint": [
         {
             "modules_with_grad": "all",
             "type": "weak",
@@ -174,22 +173,22 @@ root = "/mnt/ssd-1/alexm/w2s/results"
 # root = "/home/fslcollab366/w2s/results"
 
 weak_models = [
-    "Qwen/Qwen1.5-0.5B",
-    # "Qwen/Qwen1.5-4B",
+    # "Qwen/Qwen1.5-0.5B",
+    "Qwen/Qwen1.5-4B",
     # "Qwen/Qwen1.5-7B",
 ]
 ds_names = [
-    # "boolq",
+    "boolq",
     # "anli-r2",
     # "ethics-virtue",
     # "ethics-utilitarianism",
     # "ethics-justice",
     # "ethics-deontology",
-    # "hellaswag",
+    "hellaswag",
     # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    # "sciq",
+    "sciq",
     "cola",
     "cosmos_qa",
     "quail",
@@ -238,7 +237,7 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 "{weak_ds_path} "
                 "{oracle_ds_path} "
                 "{test_ds_path} "
-                "10_000 10_000 1000 "
+                "100_000 100_000 1000 "
                 "--seed {seed} "
                 "--strong_model_name {model_name} "
                 "--reporter_stages {reporter_stages} "
@@ -271,7 +270,7 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 for stage in stages:
                     is_weak = stage["type"] == "weak"
                     total_points = (
-                        20_000  # NOTE: total number of datapoints, including repetions
+                        30_000  # NOTE: total number of datapoints, including repetions
                     )
                     # over epochs
                     num = num_weak if is_weak else num_oracle
@@ -294,7 +293,7 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                         del stage["val_frac"]
                     stage["num_train_epochs"] = num_epochs
 
-                seed = random.randint(0, 100)
+                seed = 101  # random.randint(0, 100)
                 model_last = strong_model_name.split("/")[-1]
                 run_name = (
                     f"nw={num_weak}_no={num_oracle}_m={model_last}_{sweep_name}_s{seed}"
@@ -325,41 +324,132 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
 
             pairs = [
                 # weak, oracle
-                (3000, 2000),
-                (2000, 3000),
-                (999, 4000),
-                (250, 4750),
-                (0, 5000),
-                (999, 400),
-                (0, 500),
-                (5000, 0),
-                (4750, 250),
-                (4000, 1000),
-                (3000, 2000),
-                (2000, 3000),
-                (999, 4000),
-                (250, 4750),
-                (0, 5000),
-                (4750, 25),
-                (4000, 100),
-                (3000, 200),
-                (2000, 300),
-                (999, 400),
-                (250, 475),
-                (0, 500),
-                (4750, 2),
-                (4000, 10),
-                (3000, 20),
-                (2000, 30),
-                (999, 40),
-                (250, 47),
-                (0, 50),
-                (4000, 1),
-                (3000, 2),
-                (2000, 3),
-                (999, 4),
-                (250, 4),
-                (0, 5),
+                (80, 0),
+                (70, 1),
+                (50, 3),
+                (40, 4),
+                (20, 6),
+                (10, 7),
+                (0, 8),
+                (640, 0),
+                (610, 3),
+                (520, 12),
+                (390, 25),
+                (260, 38),
+                (130, 51),
+                (40, 60),
+                (0, 64),
+                (2560, 0),
+                (2440, 12),
+                (2050, 51),
+                (1540, 102),
+                (1030, 153),
+                (520, 204),
+                (130, 243),
+                (0, 256),
+                (10240, 0),
+                (9730, 51),
+                (8200, 204),
+                (6150, 409),
+                (4100, 614),
+                (2050, 819),
+                (520, 972),
+                (0, 1024),
+                # (5000, 0),
+                # (4750, 250),
+                # (4000, 1000),
+                # (3000, 2000),
+                # (2000, 3000),
+                # (999, 4000),
+                # (250, 4750),
+                # (0, 5000),
+                # (4750, 62),
+                # (4000, 250),
+                # (3000, 500),
+                # (2000, 750),
+                # (999, 1000),
+                # (250, 1187),
+                # (0, 1250),
+                # (4750, 15),
+                # (4000, 62),
+                # (3000, 125),
+                # (2000, 187),
+                # (999, 250),
+                # (250, 296),
+                # (0, 312),
+                # (4750, 3),
+                # (4000, 15),
+                # (3000, 31),
+                # (2000, 46),
+                # (999, 62),
+                # (250, 74),
+                # (0, 78),
+                # (4000, 3),
+                # (3000, 7),
+                # (2000, 11),
+                # (999, 15),
+                # (250, 18),
+                # (0, 19),
+                # (3000, 2000),
+                # (2000, 3000),
+                # (999, 4000),
+                # (250, 4750),
+                # (0, 5000),
+                # (999, 400),
+                # (0, 500),
+                # (5000, 0),
+                # (4750, 250),
+                # (4000, 1000),
+                # (3000, 2000),
+                # (2000, 3000),
+                # (999, 4000),
+                # (250, 4750),
+                # (0, 5000),
+                # (4750, 25),
+                # (4000, 100),
+                # (3000, 200),
+                # (2000, 300),
+                # (999, 400),
+                # (250, 475),
+                # (0, 500),
+                # (4750, 2),
+                # (4000, 10),
+                # (3000, 20),
+                # (2000, 30),
+                # (999, 40),
+                # (250, 47),
+                # (0, 50),
+                # (4000, 1),
+                # (3000, 2),
+                # (2000, 3),
+                # (999, 4),
+                # (250, 4),
+                # (0, 5),
+                # (50000, 0),
+                # (45000, 5000),
+                # (25000, 25000),
+                # (4999, 45000),
+                # (0, 50000),
+                # (50000, 0),
+                # (45000, 1250),
+                # (25000, 6250),
+                # (4999, 11250),
+                # (0, 12500),
+                # (50000, 0),
+                # (45000, 500),
+                # (25000, 2500),
+                # (4999, 4500),
+                # (0, 5000),
+                # (50000, 0),
+                # (45000, 50),
+                # (25000, 250),
+                # (4999, 450),
+                # (0, 500),
+                # (50000, 0),
+                # (45000, 5),
+                # (25000, 25),
+                # (4999, 45),
+                # (0, 50),
             ]
             # pairs += [
             #     (0, num_oracle) for num_oracle in [10, 100, 300, 1000, 3000, 10_000]

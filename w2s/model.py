@@ -43,7 +43,7 @@ class ModelConfig(PredictorConfig):
     lora_modules: Optional[List[str]] = None
     num_heads: int = 1
     quantize: bool = False
-    max_ctx: int = 1024
+    max_ctx: int = 8192
 
     def to_dict(self):
         d = vars(self).copy()
