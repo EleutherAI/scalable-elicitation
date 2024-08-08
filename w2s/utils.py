@@ -77,7 +77,7 @@ def uncertainty_sample(
     n,
     temperature: float = 1.0,
     most_confident=False,
-    weights: Literal["entropy", "margin"] = "margin",
+    weights: Literal["entropy", "margin"] = "entropy",
     eps=1e-8,
 ):
     assert probs.ndim == 2
