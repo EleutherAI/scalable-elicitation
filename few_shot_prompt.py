@@ -7,8 +7,9 @@ import numpy as np
 import torch
 from datasets import Dataset, load_from_disk
 
+from w2s.few_shot_reporter import FewShotReporter
 from w2s.model import LMPredictor, ModelConfig
-from w2s.reporter import FewShotReporter, Oracle
+from w2s.reporter import Oracle
 from w2s.reporter_experiment import ExperimentConfig, train_and_eval_reporter
 from w2s.sft_utils import clear_mem, get_gpu_mem_used
 from w2s.utils import assert_type

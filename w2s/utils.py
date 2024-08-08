@@ -80,6 +80,10 @@ def uncertainty_sample(
     weights: Literal["entropy", "margin"] = "entropy",
     eps=1e-8,
 ):
+    """
+    Temperature 0 behavior might be a bit counterintuitive - we take the topk
+    indices and then shuffle them.
+    """
     assert probs.ndim == 2
     probs = torch.clamp(probs, eps, 1 - eps)
     w = (
@@ -90,10 +94,13 @@ def uncertainty_sample(
 
     w = 1 - w if most_confident else w
     w /= w.sum()
-    w = w ** (1 / temperature) if temperature != 0 else (w == w.max()).float()
+    if temperature == 0:
+        idxs = w.topk(n).indices
+    else:
+        w = w ** (1 / temperature)
 
-    # get n random indices without replacement, weighted by p_correct
-    idxs = torch.multinomial(w, n, replacement=False)
+        # get n random indices without replacement, weighted by p_correct
+        idxs = torch.multinomial(w, n, replacement=False)
     idxs = idxs[torch.randperm(len(idxs))]
     return idxs
 

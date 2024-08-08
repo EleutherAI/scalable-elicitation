@@ -4,68 +4,25 @@ import numpy as np
 
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
-    # "w2s_then_active_lp_gt": [
-    #     {
-    #         "modules_with_grad": "all",
-    #         "type": "weak",
-    #         "sampling": "random",
-    #         "warmup_steps": 40,
-    #         "val_frac": 0.2,
-    #         "load_best_model_at_end": True,
-    #     },
-    #     {
-    #         "modules_with_grad": "head",
-    #         "type": "oracle",
-    #         "sampling": "least_confident_pred",
-    #         "sample_temp": 0.25,
-    #         "warmup_steps": 40,
-    #         "per_device_train_batch_size": 8,
-    #         "gradient_accumulation_steps": 4,
-    #         "per_device_eval_batch_size": 8,
-    #         "load_best_model_at_end": False,
-    #         "reuse_optimizer_checkpoint": False,
-    #     },
-    # ],
-    # "w2s_then_lp_gt": [
-    #     {
-    #         "modules_with_grad": "all",
-    #         "type": "weak",
-    #         "sampling": "random",
-    #         "warmup_steps": 40,
-    #         "val_frac": 0.2,
-    #         "load_best_model_at_end": True,
-    #     },
-    #     {
-    #         "modules_with_grad": "head",
-    #         "type": "oracle",
-    #         "sampling": "random",
-    #         "warmup_steps": 40,
-    #         "per_device_train_batch_size": 8,
-    #         "gradient_accumulation_steps": 4,
-    #         "per_device_eval_batch_size": 8,
-    #         "load_best_model_at_end": False,
-    #         "reuse_optimizer_checkpoint": False,
-    #     },
-    # ],
-    # "seq_sft_both_estop_clean_disjoint": [
-    #     {
-    #         "modules_with_grad": "all",
-    #         "type": "weak",
-    #         "sampling": "random",
-    #         "warmup_steps": 40,
-    #         "val_frac": 0.2,
-    #         "load_best_model_at_end": True,
-    #     },
-    #     {
-    #         "modules_with_grad": "all",
-    #         "type": "oracle",
-    #         "sampling": "random",
-    #         "warmup_steps": 40,
-    #         "val_frac": 0.2,
-    #         "load_best_model_at_end": True,
-    #         "reuse_optimizer_checkpoint": False,
-    #     },
-    # ],
+    "seq_sft_both_estop_clean_disjoint": [
+        {
+            "modules_with_grad": "all",
+            "type": "weak",
+            "sampling": "random",
+            "warmup_steps": 40,
+            "val_frac": 0.2,
+            "load_best_model_at_end": True,
+        },
+        {
+            "modules_with_grad": "all",
+            "type": "oracle",
+            "sampling": "random",
+            "warmup_steps": 40,
+            "val_frac": 0.2,
+            "load_best_model_at_end": True,
+            "reuse_optimizer_checkpoint": False,
+        },
+    ],
     # "seq_sft_both_estop_disjoint_logconf": [
     #     {
     #         "modules_with_grad": "all",
@@ -89,26 +46,26 @@ cfgs = {
     #         "reuse_optimizer_checkpoint": False,
     #     },
     # ],
-    "seq_sft_both_estop_active_oracle_disjoint": [
-        {
-            "modules_with_grad": "all",
-            "type": "weak",
-            "sampling": "random",
-            "warmup_steps": 40,
-            "val_frac": 0.2,
-            "load_best_model_at_end": True,
-        },
-        {
-            "modules_with_grad": "all",
-            "type": "oracle",
-            "sampling": "least_confident_pred",
-            "sample_temp": 0.0,
-            "warmup_steps": 40,
-            "load_best_model_at_end": True,
-            "val_frac": 0.2,
-            "reuse_optimizer_checkpoint": False,
-        },
-    ],
+    # "seq_sft_both_estop_active_oracle_disjoint": [
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "weak",
+    #         "sampling": "random",
+    #         "warmup_steps": 40,
+    #         "val_frac": 0.2,
+    #         "load_best_model_at_end": True,
+    #     },
+    #     {
+    #         "modules_with_grad": "all",
+    #         "type": "oracle",
+    #         "sampling": "least_confident_pred",
+    #         "sample_temp": 0.0,
+    #         "warmup_steps": 40,
+    #         "load_best_model_at_end": True,
+    #         "val_frac": 0.2,
+    #         "reuse_optimizer_checkpoint": False,
+    #     },
+    # ],
 }
 
 root = "/mnt/ssd-1/alexm/w2s/results"
@@ -170,7 +127,7 @@ strong_model_names = [
     "meta-llama/Meta-Llama-3-8B",
 ]
 default_eval_every = 50
-bs, mbs = 32, 2
+bs, mbs = 32, 8
 for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
     for weak_ds in weak_ds_list:
         for sweep_name, stages in cfgs.items():
@@ -187,10 +144,10 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 f"--save_steps {default_eval_every} "
                 "--save_total_limit 1 "
                 f"--per_device_train_batch_size {mbs} "
-                "--per_device_eval_batch_size 3 "
+                f"--per_device_eval_batch_size {mbs} "
                 f"--gradient_accumulation_steps {bs // mbs} "
                 f"--results_folder {root}/{weak_ds} "
-                f"--max_ctx 403 "  # NOTE NOTE NOTE NOTEN OTEN OTENOTE NOTE NOTE NOTE NOTE
+                f"--max_ctx 403 "
                 '--run_name "{run_name}" '
             )
 
@@ -266,8 +223,8 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 return command
 
             weak_marginal_costs = [1 / 10]
-            oracle_spending_fracs = [0.0, 0.05, 0.5, 0.95, 1.0]
-            oracle_affordables = [8, 64, 256, 1024, 4096]
+            oracle_spending_fracs = [0.0, 0.05, 0.2, 0.4, 0.6, 0.8, 0.95, 1.0]
+            oracle_affordables = [16, 512, 4096]
 
             pairs = []
             for weak_marginal_cost in weak_marginal_costs:

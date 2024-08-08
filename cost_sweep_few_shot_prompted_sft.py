@@ -11,9 +11,9 @@ weak_models = [
     # "Qwen/Qwen1.5-7B",
 ]
 cfgs = {
-    "few_shot_prompted_sft_estop": {
+    "weak_prompted_oracle_sft_estop": {
         "modules_with_grad": "all",
-        "type": "weak",
+        "type": "oracle",
         "sampling": "random",
         "warmup_steps": 40,
         "val_frac": 0.2,
@@ -21,9 +21,10 @@ cfgs = {
         "reuse_optimizer_checkpoint": False,
     }
 }
+few_shot_type = "weak"
 
 ds_names = [
-    "boolq",
+    # "boolq",
     # "anli-r2",
     # "ethics-virtue",
     # "ethics-utilitarianism",
@@ -33,11 +34,11 @@ ds_names = [
     # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    "sciq",
+    # "sciq",
     # "cola",
-    # "cosmos_qa",
+    "cosmos_qa",
     # "quail",
-    # "social_i_qa",
+    "social_i_qa",
     # "dream",
 ]
 weak_ds_list = [
@@ -83,7 +84,7 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 "{weak_ds_path} "
                 "{oracle_ds_path} "
                 "{test_ds_path} "
-                "10000 {num_oracle} 1000 "
+                "10000 10000 1000 "
                 "--seed {seed} "
                 "--strong_model_name {model_name} "
                 f"--eval_steps {default_eval_every} "
@@ -94,6 +95,8 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 f"--gradient_accumulation_steps {bs // mbs} "
                 f"--results_folder {root}/{weak_ds} "
                 '--run_name "{run_name}" '
+                f"--few_shot_type {few_shot_type} "
+                "--num_few_shot {num_few_shot} "
             )
 
             weak_ds_path = f"{root}/{weak_ds}/weak_train"
@@ -106,6 +109,9 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 run_name = (
                     f"nw={num_weak}_no={num_oracle}_m={model_last}_{sweep_name}_s{seed}"
                 )
+                num_few_shot = num_weak if few_shot_type == "weak" else num_oracle
+                if num_few_shot > 256:
+                    return
                 command = base_command.format(
                     weak_ds_path=weak_ds_path,
                     oracle_ds_path=oracle_ds_path,
@@ -115,6 +121,7 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                     num_oracle=num_oracle,
                     run_name=run_name,
                     model_name=strong_model_name,
+                    num_few_shot=num_few_shot,
                 )
 
                 # if os.path.exists(f"{root}/{weak_ds}/{run_name}/results.json"):
@@ -126,6 +133,8 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 )
                 # over epochs
                 num = num_weak if is_weak else num_oracle
+                if num <= 1:
+                    return
                 num_epochs = max(total_points / num, 1)
                 stage_cfg["size"] = num
                 steps_per_epoch = int(np.ceil(stage_cfg["size"] / bs))
@@ -157,29 +166,23 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
 
                 return command
 
-            pairs = [
-                # weak, oracle
-                # (4750, 25),
-                # (4000, 100),
-                # (4750, 2),
-                # (4000, 10),
-                # (3000, 20),
-                # (2000, 30),
-                # (999, 40),
-                # (250, 47),
-                # (4000, 1),
-                # (3000, 2),
-                # (2000, 3),
-                # (999, 4),
-                # (250, 4),
-                (25, 4),
-                (100, 4),
-                (25, 100),
-                (100, 100),
-                (100, 25),
-                (100, 2),
-                (100, 1),
-            ]
+            weak_marginal_costs = [1 / 10]
+            oracle_spending_fracs = [0.0, 0.05, 0.5, 0.95, 1.0]
+            oracle_affordables = [8, 16, 64, 256]
+
+            pairs = []
+            for weak_marginal_cost in weak_marginal_costs:
+                for oracle_affordable in oracle_affordables:
+                    accs = []
+                    actual_osfs = []
+                    for osf in oracle_spending_fracs:
+                        n_oracle = int(osf * oracle_affordable)
+                        n_weak = int(
+                            (oracle_affordable - n_oracle) / weak_marginal_cost
+                        )
+                        n_oracle = min(n_oracle, 23_000)
+                        pairs.append((n_weak, n_oracle))
+            pairs.append((0, 8192))
 
             for num_weak, num_oracle in pairs:
                 cmd = get_command(copy.deepcopy(stage_cfg), num_weak, num_oracle)
