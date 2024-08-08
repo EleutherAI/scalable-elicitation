@@ -5,7 +5,6 @@ from typing import Literal, Optional
 import fire
 import numpy as np
 import torch
-from datasets import Dataset, load_from_disk
 
 from w2s.few_shot_reporter import FewShotPromptedSFTReporter
 from w2s.model import ModelConfig, TransformerPredictor
@@ -13,7 +12,7 @@ from w2s.reporter import Oracle, SftStage
 from w2s.reporter_experiment import ExperimentConfig, train_and_eval_reporter
 from w2s.sft_config import set_default_args
 from w2s.sft_utils import clear_mem, get_gpu_mem_used
-from w2s.utils import assert_type
+from w2s.utils import load_cached_datasets
 
 
 def few_shot_prompted_sft_reporter(
@@ -51,13 +50,18 @@ def few_shot_prompted_sft_reporter(
 
     train_stage = SftStage(**reporter_args)
 
-    # load datasets
-    weak_ds = assert_type(Dataset, load_from_disk(weak_ds_path))
-    weak_ds = weak_ds.remove_columns(["soft_label", "hard_label"])
-    oracle_ds = assert_type(Dataset, load_from_disk(oracle_ds_path)).shuffle()
-    oracle_ds = oracle_ds.select(range(min(oracle_pool_size, len(oracle_ds))))
-    test_ds = assert_type(Dataset, load_from_disk(test_ds_path))
-    test_ds = test_ds.select(range(min(n_test, len(test_ds))))
+    num_weak = num_few_shot if few_shot_type == "weak" else train_stage.size
+    num_oracle = num_few_shot if few_shot_type == "oracle" else train_stage.size
+    weak_ds, oracle_ds, test_ds = load_cached_datasets(
+        weak_ds_path,
+        oracle_ds_path,
+        test_ds_path,
+        n_test,
+        num_weak,
+        num_oracle,
+        oracle_pool_size,
+        weak_pool_size,
+    )
 
     dataset_cfg_dict = {
         "weak_ds_path": str(weak_ds_path),

@@ -103,7 +103,6 @@ class Reporter(ABC):
         self.input_col = input_col
         self.save_dir = save_dir
 
-        # ensure that weak_ds and oracle are disjoint
         assert (
             set(weak_ds["id"]) & set(oracle.get_inputs()["id"]) == set()
         ), "Weak and oracle datasets must be disjoint"

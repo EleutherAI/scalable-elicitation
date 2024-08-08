@@ -5,14 +5,13 @@ from typing import Optional
 import fire
 import numpy as np
 import torch
-from datasets import Dataset, load_from_disk
 
 from w2s.model import ModelConfig, TransformerPredictor
 from w2s.reporter import ModularSftReporter, Oracle, SftStage
 from w2s.reporter_experiment import ExperimentConfig, train_and_eval_reporter
 from w2s.sft_config import set_default_args
 from w2s.sft_utils import clear_mem, get_gpu_mem_used
-from w2s.utils import assert_type, split_args_by_prefix
+from w2s.utils import load_cached_datasets, split_args_by_prefix
 
 
 def train_reporter_on_transformer(
@@ -59,42 +58,23 @@ def train_reporter_on_transformer(
         stage_args[stage]["run_name"] = f"{run_name}-{stage[:-1]}"
     stages = [SftStage(**stage_args[f"stage{i}_"]) for i in range(reporter_stages)]
 
-    def load_from_disk_and_dedup(path: str) -> Dataset:
-        ds = assert_type(Dataset, load_from_disk(path))
-        df = ds.to_pandas()
-        df.drop_duplicates(subset=["txt"], inplace=True)
-        ds = Dataset.from_pandas(df)
-        return ds
-
-    # load datasets
-    weak_ds = load_from_disk_and_dedup(weak_ds_path)
-    weak_ds = weak_ds.remove_columns(["soft_label", "hard_label"])
-    oracle_ds = load_from_disk_and_dedup(oracle_ds_path)
-    test_ds = load_from_disk_and_dedup(test_ds_path)
-    test_ds = test_ds.select(range(min(n_test, len(test_ds))))
-
-    if weak_ds_path == oracle_ds_path:
-        # apportion the weak and oracle pool by how many of each are requested
-        total_num_weak = sum(stage.size for stage in stages if stage.type == "weak")
-        total_num_oracle = sum(stage.size for stage in stages if stage.type == "oracle")
-        num_to_weak = int(
-            len(weak_ds) * total_num_weak / (total_num_weak + total_num_oracle)
-        )
-        # get random partition
-        idxs = list(range(len(weak_ds)))
-        random.shuffle(idxs)
-        weak_ds = weak_ds.select(idxs[:num_to_weak])
-        oracle_ds = oracle_ds.select(idxs[num_to_weak:])
-
-    oracle_ds = oracle_ds.shuffle().select(range(min(oracle_pool_size, len(oracle_ds))))
-    weak_ds = weak_ds.shuffle().select(range(min(weak_pool_size, len(weak_ds))))
+    weak_ds, oracle_ds, test_ds = load_cached_datasets(
+        weak_ds_path,
+        oracle_ds_path,
+        test_ds_path,
+        n_test,
+        sum(stage.size for stage in stages if stage.type == "weak"),
+        sum(stage.size for stage in stages if stage.type == "oracle"),
+        oracle_pool_size,
+        weak_pool_size,
+    )
 
     dataset_cfg_dict = {
         "weak_ds_path": str(weak_ds_path),
         "oracle_ds_path": str(oracle_ds_path),
         "test_ds_path": str(test_ds_path),
         "n_test": n_test,
-        "weak_pool_size": weak_pool_size,
+        "weak_pool_size": len(weak_ds),
         "oracle_pool_size": len(oracle_ds),
     }
 

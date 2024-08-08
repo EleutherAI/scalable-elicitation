@@ -1,5 +1,4 @@
 import copy
-import random
 
 import numpy as np
 
@@ -75,7 +74,7 @@ strong_model_names = [
 ]
 
 default_eval_every = 50
-bs, mbs = 32, 2
+bs, mbs = 32, 1
 for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
     for weak_ds in weak_ds_list:
         for sweep_name, stage_cfg in cfgs.items():
@@ -91,7 +90,7 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 f"--save_steps {default_eval_every} "
                 "--save_total_limit 1 "
                 f"--per_device_train_batch_size {mbs} "
-                "--per_device_eval_batch_size 3 "
+                "--per_device_eval_batch_size {mbs} "
                 f"--gradient_accumulation_steps {bs // mbs} "
                 f"--results_folder {root}/{weak_ds} "
                 '--run_name "{run_name}" '
@@ -104,7 +103,7 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
             test_ds_path = f"{root}/{weak_ds}/weak_test"
 
             def get_command(stage_cfg, num_weak, num_oracle):
-                seed = random.randint(0, 100)
+                seed = 0
                 model_last = strong_model_name.split("/")[-1]
                 run_name = (
                     f"nw={num_weak}_no={num_oracle}_m={model_last}_{sweep_name}_s{seed}"

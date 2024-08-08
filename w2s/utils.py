@@ -1,7 +1,9 @@
+import random
 from typing import Any, Literal, Type, TypeVar, cast
 
 import torch
-from datasets import Dataset
+from datasets import Dataset, load_from_disk
+from pandas import DataFrame
 
 T = TypeVar("T")
 
@@ -105,17 +107,63 @@ def uncertainty_sample(
     return idxs
 
 
+has_been_warned = False
+
+
 def make_few_shot_prefix(ds: Dataset, targets: tuple[str, str]):
     """
     ds should have a "txt" column and a "labels" column
     """
+    global has_been_warned
     assert "txt" in ds.column_names and "labels" in ds.column_names
     assert all([isinstance(row["labels"], float) for row in ds])  # type: ignore
-    if any([0 < row["labels"] < 1 for row in ds]):  # type: ignore
+    if any([0 < row["labels"] < 1 for row in ds]) and not has_been_warned:  # type: ignore
         print("WARNING: labels are not in {0, 1}, hardening for prompt")
+        has_been_warned = True
     prefix = "\n\n".join(
         [f"{row['txt']}\n{targets[int(row['labels'] > 0.5)]}" for row in ds]  # type: ignore
     )
     if prefix:
         prefix += "\n\n"
     return prefix
+
+
+def load_from_disk_and_dedup(path: str) -> Dataset:
+    ds = assert_type(Dataset, load_from_disk(path))
+    df = assert_type(DataFrame, ds.to_pandas())
+    df.drop_duplicates(subset=["txt"], inplace=True)
+    ds = Dataset.from_pandas(df)
+    return ds
+
+
+def load_cached_datasets(
+    weak_ds_path: str,
+    oracle_ds_path: str,
+    test_ds_path: str,
+    n_test: int,
+    total_num_weak: int,
+    total_num_oracle: int,
+    oracle_pool_size: int,
+    weak_pool_size: int,
+) -> tuple[Dataset, Dataset, Dataset]:
+    weak_ds = load_from_disk_and_dedup(weak_ds_path)
+    weak_ds = weak_ds.remove_columns(["soft_label", "hard_label"])
+    oracle_ds = load_from_disk_and_dedup(oracle_ds_path)
+    test_ds = load_from_disk_and_dedup(test_ds_path)
+    test_ds = test_ds.select(range(min(n_test, len(test_ds))))
+
+    if weak_ds_path == oracle_ds_path:
+        # apportion the weak and oracle pool by how many of each are requested
+        num_to_weak = int(
+            len(weak_ds) * total_num_weak / (total_num_weak + total_num_oracle)
+        )
+        # get random partition
+        idxs = list(range(len(weak_ds)))
+        random.shuffle(idxs)
+        weak_ds = weak_ds.select(idxs[:num_to_weak])
+        oracle_ds = oracle_ds.select(idxs[num_to_weak:])
+
+    oracle_ds = oracle_ds.shuffle().select(range(min(oracle_pool_size, len(oracle_ds))))
+    weak_ds = weak_ds.shuffle().select(range(min(weak_pool_size, len(weak_ds))))
+
+    return weak_ds, oracle_ds, test_ds
