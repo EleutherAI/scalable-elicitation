@@ -182,33 +182,25 @@ def log_confidence_loss(
     logits,
     labels,
     step: int,
+    # preds_buffer: list,
+    # labels_buffer: list,
     warmup_steps: int = 200,
     aux_coef: float = 0.5,
     subtract_label_ent: bool = False,
-    preds_buffer: list = None,  # type: ignore
-    labels_buffer: list = None,  # type: ignore
     preds_buffer_size: int = 32,
 ):
     """
     logits: [B, 2]
     labels: [B]
     """
-    if preds_buffer is None:
-        preds_buffer = []
-    if labels_buffer is None:
-        labels_buffer = []
     logits = logits.float()
     labels = labels.float()
     # Note that we accumulate all the labels, not just `preds_buffer_size` of them
-    labels_buffer += list(labels.detach())
-    prior = torch.tensor(labels_buffer).mean().item() if len(labels_buffer) > 1 else 0.5
+    prior = labels.mean().item() if len(labels) > 1 else 0.5
 
     coef = aux_coef * min(1.0, step / warmup_steps)
     preds = torch.softmax(logits, dim=-1)
-    preds_buffer += list(preds[:, 0].detach())
-    preds_buffer = preds_buffer[-preds_buffer_size:]
-
-    threshold = torch.quantile(torch.stack(preds_buffer), prior)
+    threshold = torch.quantile(preds[:, 0], prior)
     strong_preds = torch.cat(
         [(preds[:, 0] >= threshold)[:, None], (preds[:, 0] < threshold)[:, None]],
         dim=1,

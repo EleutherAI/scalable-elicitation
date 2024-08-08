@@ -203,35 +203,6 @@ class TransformerPredictor(Predictor):
         self.tokenizer = tokenizer
         self.cfg = cfg
 
-    # def __call__(self, inputs, output_hidden_states=False):
-    #     # inputs are text strings
-    #     assert isinstance(inputs, list)
-    #     # ...ModelForSequenceClassification makes sure to score hiddens
-    #     # from the last non-padding token position
-    #     input_ids = assert_type(
-    #         torch.Tensor,
-    #         self.tokenizer(inputs, padding=True, truncation=True, return_tensors="pt")[
-    #             "input_ids"
-    #         ],
-    #     ).to(self.transformer.device)
-
-    #     outputs = self.transformer(input_ids, output_hidden_states=True)
-
-    #     # gather hiddens at the last non-padding token position
-    #     hiddens = torch.stack(
-    #         outputs.hidden_states
-    #     )  # [num_layers, n, seq_len, hidden_size]
-    #     seq_lens = input_ids.ne(assert_type(int, self.tokenizer.pad_token_id)).sum(
-    #         dim=-1
-    #     )
-    #     last_non_pad_idx = seq_lens - 1
-    #     last_hidden_states = hiddens[:, torch.arange(len(inputs)), last_non_pad_idx, :]
-
-    #     logodds = outputs.logits[:, 1] - outputs.logits[:, 0]
-    #     return (
-    #         (logodds, last_hidden_states.unbind(0)) if output_hidden_states else logodds
-    #     )
-
     def to_dict(self):
         return self.cfg.to_dict()
 

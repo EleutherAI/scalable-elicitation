@@ -25,6 +25,7 @@ def train_reporter_on_transformer(
     # model config
     strong_model_name: str = "meta-llama/Meta-Llama-3-8B",
     disable_lora: bool = False,
+    max_ctx: int = 8192,
     # ExperimentConfig
     reporter_stages=1,
     results_folder: Optional[str] = None,
@@ -103,6 +104,7 @@ def train_reporter_on_transformer(
         not disable_lora,
         TransformerPredictor,
         num_heads=num_heads,
+        max_ctx=max_ctx,
     )
     exp_cfg = ExperimentConfig(
         results_folder=results_folder,

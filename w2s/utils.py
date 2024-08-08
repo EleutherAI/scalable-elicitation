@@ -1,4 +1,4 @@
-from typing import Any, Type, TypeVar, cast
+from typing import Any, Literal, Type, TypeVar, cast
 
 import torch
 from datasets import Dataset
@@ -77,20 +77,23 @@ def uncertainty_sample(
     n,
     temperature: float = 1.0,
     most_confident=False,
+    weights: Literal["entropy", "margin"] = "margin",
     eps=1e-8,
 ):
     assert probs.ndim == 2
     probs = torch.clamp(probs, eps, 1 - eps)
-    entropies = -(probs * torch.log2(probs)).sum(dim=-1)
-
-    weights = 1 - entropies if most_confident else entropies
-    weights /= weights.sum()
-    weights = (
-        weights**1 / temperature if temperature != 0 else torch.ones_like(weights)
+    w = (
+        -(probs * torch.log2(probs)).sum(dim=-1)
+        if weights == "entropy"
+        else (1 - (probs - 0.5).abs())
     )
 
+    w = 1 - w if most_confident else w
+    w /= w.sum()
+    w = w ** (1 / temperature) if temperature != 0 else (w == w.max()).float()
+
     # get n random indices without replacement, weighted by p_correct
-    idxs = torch.multinomial(weights, n, replacement=False)
+    idxs = torch.multinomial(w, n, replacement=False)
     idxs = idxs[torch.randperm(len(idxs))]
     return idxs
 

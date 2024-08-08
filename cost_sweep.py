@@ -47,26 +47,7 @@ cfgs = {
     #         "reuse_optimizer_checkpoint": False,
     #     },
     # ],
-    "seq_sft_both_estop_clean_disjoint": [
-        {
-            "modules_with_grad": "all",
-            "type": "weak",
-            "sampling": "random",
-            "warmup_steps": 40,
-            "val_frac": 0.2,
-            "load_best_model_at_end": True,
-        },
-        {
-            "modules_with_grad": "all",
-            "type": "oracle",
-            "sampling": "random",
-            "warmup_steps": 40,
-            "val_frac": 0.2,
-            "load_best_model_at_end": True,
-            "reuse_optimizer_checkpoint": False,
-        },
-    ],
-    # "seq_sft_both_estop_clean_logconf": [
+    # "seq_sft_both_estop_clean_disjoint": [
     #     {
     #         "modules_with_grad": "all",
     #         "type": "weak",
@@ -74,7 +55,6 @@ cfgs = {
     #         "warmup_steps": 40,
     #         "val_frac": 0.2,
     #         "load_best_model_at_end": True,
-    #         "loss": "logconf",
     #     },
     #     {
     #         "modules_with_grad": "all",
@@ -86,6 +66,29 @@ cfgs = {
     #         "reuse_optimizer_checkpoint": False,
     #     },
     # ],
+    "seq_sft_both_estop_disjoint_logconf": [
+        {
+            "modules_with_grad": "all",
+            "type": "weak",
+            "sampling": "random",
+            "warmup_steps": 40,
+            "val_frac": 0.2,
+            "load_best_model_at_end": True,
+            "loss": "logconf",
+            "per_device_train_batch_size": 8,
+            "gradient_accumulation_steps": 4,
+            "per_device_eval_batch_size": 8,
+        },
+        {
+            "modules_with_grad": "all",
+            "type": "oracle",
+            "sampling": "random",
+            "warmup_steps": 40,
+            "val_frac": 0.2,
+            "load_best_model_at_end": True,
+            "reuse_optimizer_checkpoint": False,
+        },
+    ],
     # "seq_sft_oracle_estop_2x": [
     #     {
     #         "modules_with_grad": "all",
@@ -173,12 +176,12 @@ root = "/mnt/ssd-1/alexm/w2s/results"
 # root = "/home/fslcollab366/w2s/results"
 
 weak_models = [
-    # "Qwen/Qwen1.5-0.5B",
-    "Qwen/Qwen1.5-4B",
+    "Qwen/Qwen1.5-0.5B",
+    # "Qwen/Qwen1.5-4B",
     # "Qwen/Qwen1.5-7B",
 ]
 ds_names = [
-    "boolq",
+    # "boolq",
     # "anli-r2",
     # "ethics-virtue",
     # "ethics-utilitarianism",
@@ -188,12 +191,12 @@ ds_names = [
     # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    "sciq",
-    "cola",
+    # "sciq",
+    # "cola",
     "cosmos_qa",
-    "quail",
+    # "quail",
     "social_i_qa",
-    "dream",
+    # "dream",
 ]
 weak_ds_list = [
     [
@@ -248,6 +251,7 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
                 "--per_device_eval_batch_size 3 "
                 f"--gradient_accumulation_steps {bs // mbs} "
                 f"--results_folder {root}/{weak_ds} "
+                f"--max_ctx 403 "  # NOTE NOTE NOTE NOTEN OTEN OTENOTE NOTE NOTE NOTE NOTE
                 '--run_name "{run_name}" '
             )
 
@@ -322,143 +326,24 @@ for i, strong_model_name in list(enumerate(strong_model_names)):  # NOTE
 
                 return command
 
-            pairs = [
-                # weak, oracle
-                (80, 0),
-                (70, 1),
-                (50, 3),
-                (40, 4),
-                (20, 6),
-                (10, 7),
-                (0, 8),
-                (640, 0),
-                (610, 3),
-                (520, 12),
-                (390, 25),
-                (260, 38),
-                (130, 51),
-                (40, 60),
-                (0, 64),
-                (2560, 0),
-                (2440, 12),
-                (2050, 51),
-                (1540, 102),
-                (1030, 153),
-                (520, 204),
-                (130, 243),
-                (0, 256),
-                (10240, 0),
-                (9730, 51),
-                (8200, 204),
-                (6150, 409),
-                (4100, 614),
-                (2050, 819),
-                (520, 972),
-                (0, 1024),
-                # (5000, 0),
-                # (4750, 250),
-                # (4000, 1000),
-                # (3000, 2000),
-                # (2000, 3000),
-                # (999, 4000),
-                # (250, 4750),
-                # (0, 5000),
-                # (4750, 62),
-                # (4000, 250),
-                # (3000, 500),
-                # (2000, 750),
-                # (999, 1000),
-                # (250, 1187),
-                # (0, 1250),
-                # (4750, 15),
-                # (4000, 62),
-                # (3000, 125),
-                # (2000, 187),
-                # (999, 250),
-                # (250, 296),
-                # (0, 312),
-                # (4750, 3),
-                # (4000, 15),
-                # (3000, 31),
-                # (2000, 46),
-                # (999, 62),
-                # (250, 74),
-                # (0, 78),
-                # (4000, 3),
-                # (3000, 7),
-                # (2000, 11),
-                # (999, 15),
-                # (250, 18),
-                # (0, 19),
-                # (3000, 2000),
-                # (2000, 3000),
-                # (999, 4000),
-                # (250, 4750),
-                # (0, 5000),
-                # (999, 400),
-                # (0, 500),
-                # (5000, 0),
-                # (4750, 250),
-                # (4000, 1000),
-                # (3000, 2000),
-                # (2000, 3000),
-                # (999, 4000),
-                # (250, 4750),
-                # (0, 5000),
-                # (4750, 25),
-                # (4000, 100),
-                # (3000, 200),
-                # (2000, 300),
-                # (999, 400),
-                # (250, 475),
-                # (0, 500),
-                # (4750, 2),
-                # (4000, 10),
-                # (3000, 20),
-                # (2000, 30),
-                # (999, 40),
-                # (250, 47),
-                # (0, 50),
-                # (4000, 1),
-                # (3000, 2),
-                # (2000, 3),
-                # (999, 4),
-                # (250, 4),
-                # (0, 5),
-                # (50000, 0),
-                # (45000, 5000),
-                # (25000, 25000),
-                # (4999, 45000),
-                # (0, 50000),
-                # (50000, 0),
-                # (45000, 1250),
-                # (25000, 6250),
-                # (4999, 11250),
-                # (0, 12500),
-                # (50000, 0),
-                # (45000, 500),
-                # (25000, 2500),
-                # (4999, 4500),
-                # (0, 5000),
-                # (50000, 0),
-                # (45000, 50),
-                # (25000, 250),
-                # (4999, 450),
-                # (0, 500),
-                # (50000, 0),
-                # (45000, 5),
-                # (25000, 25),
-                # (4999, 45),
-                # (0, 50),
-            ]
-            # pairs += [
-            #     (0, num_oracle) for num_oracle in [10, 100, 300, 1000, 3000, 10_000]
-            # ]
-            # pairs = [(10**i - 1, 10**j - 1) for i in range(5) for j in range(5)]
-            # pairs.remove((0, 0))
-            # pairs += [(num_weak, 0) for num_weak in [10, 100, 600, 3000, 10_000]]
+            weak_marginal_costs = [1 / 10]
+            oracle_spending_fracs = [0.0, 0.05, 0.5, 0.95, 1.0]
+            oracle_affordables = [8, 64, 256, 1024, 4096]
 
-            # pairs = [generate_random_pair() for _ in range(200)]
+            pairs = []
+            for weak_marginal_cost in weak_marginal_costs:
+                for oracle_affordable in oracle_affordables:
+                    accs = []
+                    actual_osfs = []
+                    for osf in oracle_spending_fracs:
+                        n_oracle = int(osf * oracle_affordable)
+                        n_weak = int(
+                            (oracle_affordable - n_oracle) / weak_marginal_cost
+                        )
+                        n_oracle = min(n_oracle, 23_000)
+                        pairs.append((n_weak, n_oracle))
+            pairs.append((0, 8192))
+
             for num_weak, num_oracle in pairs:
                 cmd = get_command(stages, num_weak, num_oracle)
                 if cmd:
