@@ -153,7 +153,7 @@ def load_cached_datasets(
     test_ds = test_ds.select(range(min(n_test, len(test_ds))))
 
     if weak_ds_path == oracle_ds_path:
-        # apportion the weak and oracle pool by how many of each are requested
+        # apportion the weak and oracle pool proportionally by how many of each are requested
         num_to_weak = int(
             len(weak_ds) * total_num_weak / (total_num_weak + total_num_oracle)
         )

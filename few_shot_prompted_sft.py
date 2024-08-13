@@ -1,4 +1,5 @@
 import random
+from collections import defaultdict
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -50,15 +51,16 @@ def few_shot_prompted_sft_reporter(
 
     train_stage = SftStage(**reporter_args)
 
-    num_weak = num_few_shot if few_shot_type == "weak" else train_stage.size
-    num_oracle = num_few_shot if few_shot_type == "oracle" else train_stage.size
+    nums = defaultdict(int)
+    nums[few_shot_type] += num_few_shot
+    nums[train_stage.type] += train_stage.size
     weak_ds, oracle_ds, test_ds = load_cached_datasets(
         weak_ds_path,
         oracle_ds_path,
         test_ds_path,
         n_test,
-        num_weak,
-        num_oracle,
+        nums["weak"],
+        nums["oracle"],
         oracle_pool_size,
         weak_pool_size,
     )

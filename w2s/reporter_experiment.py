@@ -44,19 +44,19 @@ def train_and_eval_reporter(
 
     reporter.fit()
     with torch.no_grad():
-        cal_logodds = reporter(test_ds[reporter.input_col])  # type: ignore
+        logodds = reporter(test_ds[reporter.input_col])  # type: ignore
 
-    cal_logodds = cal_logodds.cpu().float().numpy()
+    logodds = logodds.cpu().float().numpy()
     gt_labels = np.array(test_ds["soft_label"])[:, 1]
     if not ((gt_labels == 0) | (gt_labels == 1)).all():
         warnings.warn("Ground truth labels are not binary, so we're thresholding them.")
-    auc_result = roc_auc_ci(gt_labels > 0.5, cal_logodds)
-    acc_result = acc_ci((cal_logodds > 0), (gt_labels > 0.5))
+    auc_result = roc_auc_ci(gt_labels > 0.5, logodds)
+    acc_result = acc_ci((logodds > 0), (gt_labels > 0.5))
 
     if "soft_pred" in test_ds.column_names:
         weak_test_labels = np.array(test_ds["soft_pred"])[:, 1]
-        weak_auc_result = roc_auc_ci(weak_test_labels > 0.5, cal_logodds)
-        weak_acc_result = acc_ci((cal_logodds > 0), (weak_test_labels > 0.5))
+        weak_auc_result = roc_auc_ci(weak_test_labels > 0.5, logodds)
+        weak_acc_result = acc_ci((logodds > 0), (weak_test_labels > 0.5))
 
         weak_results = {
             "auroc_against_weak": float(weak_auc_result.estimate),
@@ -80,7 +80,7 @@ def train_and_eval_reporter(
         **weak_results,
         "oracle_ids": list(reporter.oracle.ids_labeled),
         "ids": test_ds["id"],
-        "calibrated_logodds": cal_logodds.tolist(),
+        "calibrated_logodds": logodds.tolist(),  # note that "calibrated logodds" is a misnomer
         "gt_soft_labels": gt_labels.tolist(),
         "reporter": reporter.to_dict(),
     }
