@@ -1,7 +1,6 @@
 import datetime
 import json
 import os
-import time
 
 import numpy as np
 from datasets import DatasetDict, concatenate_datasets, load_from_disk
@@ -109,6 +108,12 @@ for num_weak, num_oracle in pairs:
     if model is None:
         print(f"SKIPPING because {num_weak}-{num_oracle}-weak has no model")
         continue
+    if 1 <= num_oracle < 10:
+        print(
+            f"SKIPPING because {num_weak}-{num_oracle}-oracle does "
+            "not have enough oracle examples for the openai api"
+        )
+        continue
 
     if num_oracle == 0:
         # update dict with the weak checkpoint
@@ -141,13 +146,16 @@ for num_weak, num_oracle in pairs:
             break
         except RateLimitError:
             print(f"Rate limit error at {datetime.datetime.now()}")
-            time.sleep(60 * 10)
-            continue
+            # time.sleep(60 * 10)
+            # continue
+            break
         except Exception as e:
             print(f"Error: {e}")
 
-            time.sleep(120)
-            continue
-    with open("openai/jobs.json", "w") as f:
-        f.write(json.dumps(jobs))
-    print(f"FINISHED {num_weak} {num_oracle}")
+            # time.sleep(120)
+            # continue
+            break
+    if name in jobs:
+        with open("openai/jobs.json", "w") as f:
+            f.write(json.dumps(jobs))
+        print(f"FINISHED {num_weak} {num_oracle}")
