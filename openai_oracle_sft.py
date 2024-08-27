@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import time
 
 import numpy as np
 from datasets import DatasetDict, concatenate_datasets, load_from_disk
@@ -51,15 +52,35 @@ def upload_files(is_weak, num_weak, num_oracle, num_test, source_dict):
         ex["completion"]["completion"] = compl_choices[ex["label"]]
         return ex
 
+    def check_moderation(message):
+        try:
+            response = client.moderations.create(input=message)
+            return response.results[0].flagged
+        except Exception as e:
+            print(f"Error checking moderation: {e}")
+            return False
+
     train = train.map(modify_messages)
 
     test = source_dict["test"].shuffle(seed=0).select(range(num_test))
 
     os.makedirs(f"openai/{name}", exist_ok=True)
     with open(f"openai/{name}/{weak_oracle}_train.jsonl", "w") as f:
-        f.write("\n".join([json.dumps(d) for d in train["messages"]]))
+        clean = [
+            d
+            for d in train["messages"]
+            if not check_moderation(d["messages"][1]["content"])
+        ]
+        print(f"{len(train['messages'])} -> {len(clean)} train messages")
+        f.write("\n".join([json.dumps(d) for d in clean]))
     with open(f"openai/{name}/{weak_oracle}_test.jsonl", "w") as f:
-        f.write("\n".join([json.dumps(d) for d in test["messages"]]))
+        clean = [
+            d
+            for d in test["messages"]
+            if not check_moderation(d["messages"][1]["content"])
+        ]
+        print(f"{len(test['messages'])} -> {len(clean)} test messages")
+        f.write("\n".join([json.dumps(d) for d in clean]))
 
     train_file = client.files.create(
         file=open(f"openai/{name}/{weak_oracle}_train.jsonl", "rb"), purpose="fine-tune"
@@ -89,10 +110,16 @@ with open("openai/jobs.json", "r") as f:
 for num_weak, num_oracle in pairs:
     print(f"TRYING {num_weak} {num_oracle}")
     if f"{num_weak}-{num_oracle}-oracle" in jobs:
-        print(
-            f"SKIPPING because {num_weak}-{num_oracle}-oracle has already been started"
+        jdict = jobs[f"{num_weak}-{num_oracle}-oracle"]
+        job = client.fine_tuning.jobs.retrieve(
+            jdict.get("job", jdict.get("weak_job"))["id"]
         )
-        continue
+        if job.status == "succeeded":
+            print(
+                f"SKIPPING because {num_weak}-{num_oracle}-oracle has already "
+                "been successfully completed"
+            )
+            continue
     if num_weak > len(weak_dict["train"]):
         print(
             f"SKIPPING because {num_weak}-{num_oracle}-oracle has too many weak examples"
@@ -146,15 +173,14 @@ for num_weak, num_oracle in pairs:
             break
         except RateLimitError:
             print(f"Rate limit error at {datetime.datetime.now()}")
-            # time.sleep(60 * 10)
-            # continue
-            break
+            time.sleep(60 * 10)
+            continue
+
         except Exception as e:
             print(f"Error: {e}")
+            time.sleep(120)
+            continue
 
-            # time.sleep(120)
-            # continue
-            break
     if name in jobs:
         with open("openai/jobs.json", "w") as f:
             f.write(json.dumps(jobs))

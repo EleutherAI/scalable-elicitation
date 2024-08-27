@@ -186,7 +186,7 @@ class FewShotPromptedSFTReporter(Reporter):
             data_collator=DataCollatorWithPadding(
                 self.strong_model.tokenizer,
                 max_length=self.strong_model.cfg.max_ctx,
-                padding="max_length",
+                padding="longest",
             ),
             model=self.strong_model.transformer,
             tokenizer=self.strong_model.tokenizer,

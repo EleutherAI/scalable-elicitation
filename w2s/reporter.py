@@ -389,7 +389,7 @@ class ModularSftReporter(Reporter):
             data_collator=DataCollatorWithPadding(
                 self.strong_model.tokenizer,
                 max_length=self.strong_model.cfg.max_ctx,
-                padding="max_length",
+                padding="longest",
             ),  # NOTE: this could mess up some datasets
             model=self.strong_model.transformer,
             tokenizer=self.strong_model.tokenizer,
@@ -563,7 +563,7 @@ class DivDisSftReporter(Reporter):
             data_collator=DataCollatorWithPadding(
                 self.strong_model.tokenizer,
                 max_length=self.strong_model.cfg.max_ctx,
-                padding="max_length",
+                padding="longest",
             ),  # NOTE: this could mess up some datasets
             model=self.strong_model.transformer,
             tokenizer=self.strong_model.tokenizer,
