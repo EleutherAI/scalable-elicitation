@@ -798,6 +798,30 @@ register_dataset(
     ),
 )
 
+
+def format_mmlu(ex, rng):
+    hard_label = int(rng.random() < 0.5)
+    if hard_label:
+        ans = ex["choices"][int(ex["answer"])]
+    else:
+        ans = rng.choice(
+            [c for i, c in enumerate(ex["choices"]) if i != int(ex["answer"])]
+        )
+
+    choices = "\n".join(ex["choices"])
+    txt = f"{ex['question']}\n\n{choices}\n\nA: {ans}."
+    return dict(txt=txt, hard_label=hard_label)
+
+
+register_dataset(
+    "mmlu",
+    DatasetConfig(
+        loader=hf_loader("cais/mmlu", "all", n_test=3000),  # type: ignore
+        formatter=format_mmlu,  # type: ignore
+    ),
+)
+
+
 VALID_DATASETS: list[str] = list(_REGISTRY.keys())
 
 

@@ -8,8 +8,10 @@ from datasets import DatasetDict, concatenate_datasets, load_from_disk
 from openai import OpenAI, RateLimitError
 
 weak_marginal_costs = [1 / 10]
-oracle_spending_fracs = [0.0, 0.05, 0.5, 0.95, 1.0]
-oracle_affordables = [16, 64, 256, 1024, 4096]
+# oracle_spending_fracs = [0.0, 0.05, 0.5, 0.95, 1.0]
+oracle_spending_fracs = [0.0, 1.0]
+oracle_affordables = [10]
+# oracle_affordables = [16, 64, 256, 1024, 4096]
 
 pairs = []
 for weak_marginal_cost in weak_marginal_costs:
@@ -21,7 +23,7 @@ for weak_marginal_cost in weak_marginal_costs:
             n_weak = int((oracle_affordable - n_oracle) / weak_marginal_cost)
             n_oracle = min(n_oracle, 23_000)
             pairs.append((n_weak, n_oracle))
-pairs.append((0, 8192))
+# pairs.append((0, 8192))
 pairs = list(set(pairs))
 
 
