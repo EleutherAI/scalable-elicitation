@@ -1,6 +1,6 @@
 import random
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import fire
 import numpy as np
@@ -33,8 +33,13 @@ def train_reporter_on_transformer(
     input_col: str = "txt",
     seed: int = 42,
     num_heads: int = 1,
+    n_few_shot: int = 0,
+    few_shot_type: Optional[Literal["weak", "oracle"]] = None,
     **reporter_args,
 ):
+    if n_few_shot > 0:
+        assert few_shot_type is not None
+
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -59,16 +64,27 @@ def train_reporter_on_transformer(
         stage_args[stage]["run_name"] = f"{run_name}-{stage[:-1]}"
     stages = [SftStage(**stage_args[f"stage{i}_"]) for i in range(reporter_stages)]
 
+    n_few_shot_weak = n_few_shot if few_shot_type == "weak" else 0
+    n_few_shot_oracle = n_few_shot if few_shot_type == "oracle" else 0
     weak_ds, oracle_ds, test_ds = load_cached_datasets(
         weak_ds_path,
         oracle_ds_path,
         test_ds_path,
         n_test,
-        sum(stage.size for stage in stages if stage.type == "weak"),
-        sum(stage.size for stage in stages if stage.type == "oracle"),
+        sum(stage.size for stage in stages if stage.type == "weak") + n_few_shot_weak,
+        sum(stage.size for stage in stages if stage.type == "oracle")
+        + n_few_shot_oracle,
         oracle_pool_size,
         weak_pool_size,
     )
+
+    if n_few_shot > 0:
+        few_shot_ds = (
+            weak_ds.shuffle().select(range(n_few_shot))
+            if few_shot_type == "weak"
+            else oracle_ds.shuffle().select(range(n_few_shot))
+        )
+        assert len(few_shot_ds) == n_few_shot
 
     dataset_cfg_dict = {
         "weak_ds_path": str(weak_ds_path),
@@ -103,6 +119,8 @@ def train_reporter_on_transformer(
         strong_model=strong_model,
         stages=stages,
         input_col=input_col,
+        few_shot_ds=few_shot_ds,
+        few_shot_type=few_shot_type,
     )
 
     train_and_eval_reporter(

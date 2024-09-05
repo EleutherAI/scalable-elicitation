@@ -124,6 +124,7 @@ class FewShotPromptedSFTReporter(Reporter):
         ), "FewShotPromptedSFTReporter only supports input_col='txt'"
         assert isinstance(self.strong_model, TransformerPredictor)
         self.few_shot_ds = self.get_few_shot_dataset()
+        self.prefix_train_ds()
 
     def get_few_shot_dataset(self):
         if self.few_shot_type == "oracle":
@@ -158,8 +159,6 @@ class FewShotPromptedSFTReporter(Reporter):
             self.oracle._df["txt"] = self.oracle._df["txt"].apply(fn)
 
     def fit(self):
-        self.prefix_train_ds()
-
         print("\n\033[32m [Training on weak labels] \033[0m")  # green text
         self.train_stage.run(self, None)  # type: ignore
 

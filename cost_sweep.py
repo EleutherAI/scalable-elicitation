@@ -94,24 +94,47 @@ def openai_modify_stages_by_n(stages, num_weak, num_oracle):
 
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
-    "seq_sft_openai_settings": {
+    # "seq_sft_openai_settings": {
+    #     "stages": [
+    #         {
+    #             "modules_with_grad": "all",
+    #             "type": "weak",
+    #             "sampling": "random",
+    #             "warmup_steps": 40,
+    #             "load_best_model_at_end": False,
+    #         },
+    #         {
+    #             "modules_with_grad": "all",
+    #             "type": "oracle",
+    #             "sampling": "random",
+    #             "warmup_steps": 40,
+    #             "reuse_optimizer_checkpoint": False,
+    #         },
+    #     ],
+    #     "modify_stages_by_n": openai_modify_stages_by_n,
+    # },
+    "seq_sft_both_estop_clean_disjoint_2shot": {
         "stages": [
             {
                 "modules_with_grad": "all",
                 "type": "weak",
                 "sampling": "random",
                 "warmup_steps": 40,
-                "load_best_model_at_end": False,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
             },
             {
                 "modules_with_grad": "all",
                 "type": "oracle",
                 "sampling": "random",
                 "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
                 "reuse_optimizer_checkpoint": False,
             },
         ],
-        "modify_stages_by_n": openai_modify_stages_by_n,
+        "modify_stages_by_n": estop_modify_stages_by_n,
+        "extra_args": ["--n_few_shot 2", "--few_shot_type weak"],
     },
     # "seq_sft_both_estop_clean_disjoint": {
     #     "stages": [
@@ -207,7 +230,7 @@ ds_names = [
     # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    "sciq",
+    # "sciq",
     # "cola",
     "cosmos_qa",
     # "quail",
@@ -247,12 +270,12 @@ strong_model_names = [
     "meta-llama/Meta-Llama-3-8B",
     # "meta-llama/Meta-Llama-3-70B",
 ]
-quantize = True
 default_eval_every = 50
 
 max_mbs = 1
 for seed in [0]:
     for i, strong_model_name in list(enumerate(strong_model_names)):
+        quantize = strong_model_name == "meta-llama/Meta-Llama-3-70B"
         for weak_ds in weak_ds_list:
             for sweep_name, cfg in cfgs.items():
                 base_command = (

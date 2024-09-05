@@ -19,6 +19,7 @@ from w2s.sft_utils import get_gpu_mem_used
 from w2s.utils import (
     assert_type,
     ds_with_labels,
+    make_few_shot_prefix,
     uncertainty_sample,
 )
 
@@ -346,12 +347,21 @@ class ModularSftReporter(Reporter):
         stages: list[SftStage],
         strong_model: TransformerPredictor,
         input_col: str = "txt",
+        few_shot_ds: Dataset | None = None,
+        few_shot_type: Literal["oracle", "weak"] | None = None,
+        targets: tuple[str, str] = ("0", "1"),
     ):
         super().__init__(weak_ds, oracle, test_ds, strong_model, input_col)
         self.stages = stages
         self.test_ds = ds_with_labels(test_ds)
-
+        self.few_shot_ds = few_shot_ds
+        self.few_shot_type = few_shot_type
+        assert (few_shot_ds is None) == (
+            few_shot_type is None
+        ), "incompatible few-shot args"
         assert input_col == "txt", "Only LM SFT is supported"
+        self.targets = targets
+        self.prefix_train_datasets()
 
     def fit(self) -> ModularSftReporter:
         optimizer_checkpoint = None
@@ -361,21 +371,29 @@ class ModularSftReporter(Reporter):
 
         return self
 
-    def to_dict(self) -> dict:
-        return {
-            "method": self.__class__.__name__,
-            "stages": [s.to_dict() for s in self.stages],
-            "model": self.strong_model.to_dict(),
-            "num_weak": len(set.union(*(set(s.weak_ids_used) for s in self.stages))),
-            "num_weak_nonunique": sum(len(s.weak_ids_used) for s in self.stages),
-            "num_oracle": len(set(self.oracle.ids_labeled)),
-            "num_oracle_nonunique": len(self.oracle.ids_labeled),
-        }
+    def prefix_train_datasets(self):
+        def fn(txt):
+            assert self.few_shot_ds is not None
+            return (
+                make_few_shot_prefix(self.few_shot_ds.shuffle(), self.targets)
+                + txt
+                + "\n"
+            )
+
+        self.weak_ds = self.weak_ds.map(lambda x: {"txt": fn(x["txt"])})
+        self.oracle._df["txt"] = self.oracle._df["txt"].apply(fn)
 
     def __call__(self, inputs: list) -> torch.Tensor:
         """
         Returns the logodds of the classifier's predictions
         """
+        if self.few_shot_ds is not None:
+            inputs = [
+                make_few_shot_prefix(self.few_shot_ds.shuffle(), self.targets)
+                + x
+                + "\n"
+                for x in inputs
+            ]
         predict_ds = prepare_for_trainer(
             Dataset.from_dict({self.input_col: inputs}), self.strong_model.tokenizer
         )
@@ -390,12 +408,38 @@ class ModularSftReporter(Reporter):
                 self.strong_model.tokenizer,
                 max_length=self.strong_model.cfg.max_ctx,
                 padding="longest",
-            ),  # NOTE: this could mess up some datasets
+            ),  # NOTE: this could silently truncate some datasets
             model=self.strong_model.transformer,
             tokenizer=self.strong_model.tokenizer,
         )
         pred_logits = torch.from_numpy(trainer.predict(predict_ds).predictions)  # type: ignore # noqa
         return pred_logits.diff(dim=-1).squeeze()
+
+    def to_dict(self) -> dict:
+        if self.few_shot_ds is not None:
+            fs_weak_ids = (
+                set(self.few_shot_ds["id"]) if self.few_shot_type == "weak" else set()
+            )
+            fs_oracle_ids = (
+                set(self.few_shot_ds["id"]) if self.few_shot_type == "oracle" else set()
+            )
+        return {
+            "method": self.__class__.__name__,
+            "stages": [s.to_dict() for s in self.stages],
+            "model": self.strong_model.to_dict(),
+            "num_weak": len(
+                set.union(*(set(s.weak_ids_used) for s in self.stages)).union(
+                    fs_weak_ids
+                )
+            ),
+            "num_weak_nonunique": sum(
+                len(s.weak_ids_used) for s in self.stages
+            ),  # counted once per train stage
+            "num_oracle": len(set(self.oracle.ids_labeled).union(fs_oracle_ids)),
+            "num_oracle_nonunique": len(self.oracle.ids_labeled),
+            "few_shot_type": self.few_shot_type,
+            "n_few_shot": len(self.few_shot_ds) if self.few_shot_ds is not None else 0,
+        }
 
 
 class DivDisSftReporter(Reporter):
