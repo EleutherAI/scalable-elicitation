@@ -2,17 +2,14 @@ from __future__ import annotations
 
 import random
 from abc import ABC
-from pathlib import Path
 from typing import Literal, Optional
 
 import pandas as pd
 import torch
-from datasets import Dataset, DatasetDict, concatenate_datasets
+from datasets import Dataset, DatasetDict
 from peft.tuners.lora.layer import LoraLayer
-from torch import nn, optim
 from transformers import DataCollatorWithPadding, Trainer, TrainingArguments
 
-from w2s.metrics import roc_auc
 from w2s.model import Predictor, TransformerPredictor
 from w2s.sft import is_sft_cached, lm_sft, prepare_for_trainer
 from w2s.sft_utils import get_gpu_mem_used
@@ -307,6 +304,7 @@ class SftStage:
 
         print(f"{get_gpu_mem_used() * 100}% of all GPU mem in use before training")
 
+        breakpoint()
         lm_sft(
             ds_dict=ds_dict,
             model=reporter.strong_model.transformer,
@@ -440,203 +438,6 @@ class ModularSftReporter(Reporter):
             "few_shot_type": self.few_shot_type,
             "n_few_shot": len(self.few_shot_ds) if self.few_shot_ds is not None else 0,
         }
-
-
-class DivDisSftReporter(Reporter):
-    """
-    Diversify and Disambiguate finetuning: https://arxiv.org/abs/2202.03418
-
-    Diversification:
-    - Train multiple heads with different random initializations
-    - Use trusted (weak) data with xent loss and diversify on unlabeled target (oracle) data
-    Disambiguation:
-    - Use oracle examples to select a head
-    - Calibrate that head with Platt scaling
-    """
-
-    strong_model: TransformerPredictor
-    best_head: int
-    bias = torch.nn.Parameter(torch.tensor(0.0))
-    scale = torch.nn.Parameter(torch.tensor(1.0))
-
-    def __init__(
-        self,
-        weak_ds: Dataset,
-        oracle: Oracle,
-        test_ds: Dataset,
-        strong_model: TransformerPredictor,
-        input_col: str = "txt",
-        save_dir: str = "./results",
-        **kwargs,
-    ):
-        super().__init__(weak_ds, oracle, test_ds, strong_model, input_col)
-        self.test_ds = ds_with_labels(test_ds)
-        self.weak_train_args = kwargs
-        self.weak_train_args[
-            "run_name"
-        ] = f"div_{self.weak_train_args.get('run_name', 'default')}"
-        self.weak_train_args["output_dir"] = str(Path(save_dir) / "div")
-
-        assert input_col == "txt", "Only LM SFT is supported"
-
-    def fit(self, max_queries: int) -> "DivDisSftReporter":
-        # ### Diversification ###
-        # we use label -1 for target data, and pass a custom loss function that deals
-        # with -1 examples separately
-        weak_ds = ds_with_labels(self.weak_ds, labels_column="soft_pred")
-        train_target_ds = (
-            Dataset.from_pandas(self.oracle.get_inputs(), preserve_index=False)
-            .shuffle()
-            .select(range(len(weak_ds)))  # NOTE: this is a hyperparameter
-        )
-        train_target_ds = train_target_ds.add_column(  # type: ignore
-            "labels", [-1.0] * len(train_target_ds)
-        ).cast(weak_ds.features)
-        weak_ds = concatenate_datasets([weak_ds, train_target_ds])
-        weak_ds_dict = DatasetDict(train=weak_ds, test=self.test_ds)
-
-        self.div_trainer = lm_sft(
-            ds_dict=weak_ds_dict,
-            model=self.strong_model.transformer,
-            tokenizer=self.strong_model.tokenizer,
-            train_args=TrainingArguments(**self.weak_train_args),
-            loss="divdis",
-            store_pre_hiddens=False,
-            store_post_hiddens=False,
-            cfg=self.to_dict(),
-            predict_dict=None,
-        )
-
-        # then disambiguate
-        if max_queries > 0:
-            oracle_ds = ds_with_labels(self.get_oracle_ds(max_queries))
-            self._disambiguate(oracle_ds)
-            self._platt_scale(oracle_ds)
-        else:
-            self.best_head = 0
-
-        return self
-
-    def get_oracle_ds(self, max_queries: int) -> Dataset:
-        # Select examples according to the amount of disagreement between heads
-        # Lee et al. use total distance between head predictions (hardened, I believe)
-        # but we would prefer to also care about the confidence of disagreements
-        # so we use the total cross entropy between every pair of heads
-
-        all_oracle_inputs = Dataset.from_pandas(
-            self.oracle.get_inputs(), preserve_index=False
-        )
-
-        print(
-            "Selecting examples with average cross entropy between pairs of heads for training."
-        )
-
-        pred_logodds = self._call_all_heads(all_oracle_inputs["txt"])
-        logprobs = torch.nn.functional.logsigmoid(pred_logodds)  # [b, h]
-        log1mprobs = torch.nn.functional.logsigmoid(-pred_logodds)
-        probs = logprobs.exp()
-        # xent = -p * log(q) - (1-p) * log(1-q) for each pair p, q
-        xents = -torch.einsum("bh,bg->bhg", probs, logprobs) - torch.einsum(
-            "bh,bg->bhg", 1 - probs, log1mprobs
-        )  # [b, h, h]
-        avg_xents = xents.mean(dim=-1).mean(dim=-1)  # [b]
-
-        uncertain_idxs = torch.multinomial(avg_xents, max_queries, replacement=False)
-
-        oracle_ids = (
-            [all_oracle_inputs["id"][idx] for idx in uncertain_idxs]
-            if len(all_oracle_inputs) > 0
-            else []
-        )
-        return Dataset.from_pandas(
-            self.oracle.query_ids(oracle_ids), preserve_index=False
-        ).shuffle()
-
-    def _disambiguate(self, oracle_ds: Dataset) -> int:
-        # get predictions from all heads
-        pred_logits = self._call_all_heads(oracle_ds[self.input_col])
-
-        # pick the head with the highest auroc on the oracle data
-        labels = (torch.as_tensor(oracle_ds["labels"]) > 0.5).long()
-        labels = labels.unsqueeze(-1).expand(-1, pred_logits.shape[-1])
-        aurocs = roc_auc(labels, pred_logits)
-        self.best_head = int(aurocs.argmax())
-        return self.best_head
-
-    def _platt_scale(self, oracle_ds: Dataset, max_iter: int = 100) -> None:
-        """Fit the scale and bias terms to data with LBFGS.
-
-        Args:
-            oracle_ds: Dataset with columns ["txt", "labels"]
-            max_iter: Maximum number of iterations for LBFGS.
-        """
-        opt = optim.LBFGS(
-            [self.bias, self.scale],
-            line_search_fn="strong_wolfe",
-            max_iter=max_iter,
-            tolerance_change=torch.finfo(torch.bfloat16).eps,
-            tolerance_grad=torch.finfo(torch.bfloat16).eps,
-        )
-
-        def closure():
-            opt.zero_grad()
-            loss = nn.functional.binary_cross_entropy(
-                torch.sigmoid(self(oracle_ds[self.input_col])),
-                torch.as_tensor(oracle_ds["labels"]).float(),
-            )
-
-            loss.backward()
-            return float(loss)
-
-        opt.step(closure)
-
-    def _call_all_heads(self, inputs: list) -> torch.Tensor:
-        """
-        Returns the logodds of the classifier's predictions for all heads
-        """
-        predict_ds = prepare_for_trainer(
-            Dataset.from_dict({self.input_col: inputs}), self.strong_model.tokenizer
-        )
-        # turn off wandb logging in trainer
-        targs = self.weak_train_args.copy()
-        targs["report_to"] = "none"
-        targs["output_dir"] = "tmp"
-        targs["run_name"] = "tmp"
-        trainer = Trainer(
-            args=TrainingArguments(**targs),
-            data_collator=DataCollatorWithPadding(
-                self.strong_model.tokenizer,
-                max_length=self.strong_model.cfg.max_ctx,
-                padding="longest",
-            ),  # NOTE: this could mess up some datasets
-            model=self.strong_model.transformer,
-            tokenizer=self.strong_model.tokenizer,
-        )
-        pred_logits = torch.from_numpy(trainer.predict(predict_ds).predictions)  # type: ignore # noqa
-        return pred_logits.diff(dim=-1).squeeze()
-
-    def __call__(self, inputs: list) -> torch.Tensor:
-        """
-        Returns the logodds of the classifier's predictions from its best head
-        inputs: a list of strings
-        """
-        assert hasattr(self, "best_head"), "Must fit before calling"
-        lo = self._call_all_heads(inputs)[..., self.best_head]
-        return self.scale.to(lo.dtype).to(lo.device) * lo + self.bias.to(lo.dtype).to(
-            lo.device
-        )
-
-    def to_dict(self) -> dict:
-        return {
-            "method": self.__class__.__name__,
-            "weak_train_args": self.weak_train_args,
-            "model": self.strong_model.to_dict(),
-        }
-
-
-class DivDisProbingReporter(Reporter):
-    # optionally finetunes on trusted examples first
-    ...
 
 
 REPORTER_REGISTRY: dict[str, type[Reporter]] = {

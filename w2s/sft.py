@@ -11,7 +11,7 @@ from transformers import (
 )
 
 import wandb
-from w2s.loss import CustomLossTrainer, DivDisTrainer
+from w2s.loss import CustomLossTrainer
 from w2s.sft_utils import (
     AccuracyStoppingCallback,
     EarlyStoppingCallback,
@@ -118,7 +118,7 @@ def lm_sft(
     if target_accuracy is not None:
         callbacks.append(AccuracyStoppingCallback(target_accuracy))
 
-    cls = DivDisTrainer if loss == "divdis" else CustomLossTrainer
+    cls = CustomLossTrainer
     trainer = cls(
         loss_name=loss,
         resume_from_optimizer_checkpoint=resume_from_checkpoint,
