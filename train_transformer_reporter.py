@@ -85,6 +85,8 @@ def train_reporter_on_transformer(
             else oracle_ds.shuffle().select(range(n_few_shot))
         )
         assert len(few_shot_ds) == n_few_shot
+    else:
+        few_shot_ds = None
 
     dataset_cfg_dict = {
         "weak_ds_path": str(weak_ds_path),

@@ -136,30 +136,7 @@ cfgs = {
     #     "modify_stages_by_n": estop_modify_stages_by_n,
     #     "extra_args": ["--n_few_shot 2", "--few_shot_type weak"],
     # },
-    "seq_sft_both_estop_clean_disjoint_32shot_weak": {
-        "stages": [
-            {
-                "modules_with_grad": "all",
-                "type": "weak",
-                "sampling": "random",
-                "warmup_steps": 40,
-                "val_frac": 0.2,
-                "load_best_model_at_end": True,
-            },
-            {
-                "modules_with_grad": "all",
-                "type": "oracle",
-                "sampling": "random",
-                "warmup_steps": 40,
-                "val_frac": 0.2,
-                "load_best_model_at_end": True,
-                "reuse_optimizer_checkpoint": False,
-            },
-        ],
-        "modify_stages_by_n": estop_modify_stages_by_n,
-        "extra_args": ["--n_few_shot 32", "--few_shot_type weak"],
-    },
-    # "seq_sft_both_estop_clean_disjoint": {
+    # "seq_sft_both_estop_clean_disjoint_32shot_weak": {
     #     "stages": [
     #         {
     #             "modules_with_grad": "all",
@@ -180,7 +157,30 @@ cfgs = {
     #         },
     #     ],
     #     "modify_stages_by_n": estop_modify_stages_by_n,
+    #     "extra_args": ["--n_few_shot 32", "--few_shot_type weak"],
     # },
+    "seq_sft_both_estop_clean_disjoint": {
+        "stages": [
+            {
+                "modules_with_grad": "all",
+                "type": "weak",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+            },
+            {
+                "modules_with_grad": "all",
+                "type": "oracle",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+                "reuse_optimizer_checkpoint": False,
+            },
+        ],
+        "modify_stages_by_n": estop_modify_stages_by_n,
+    },
     # "seq_sft_both_estop_disjoint_logconf": {
     #     "stages": [
     #         {
@@ -237,38 +237,38 @@ cfgs = {
 root = "/mnt/ssd-1/alexm/w2s/results"
 # root = "/home/fslcollab366/w2s/results"
 
-# weak_models = [
-#     "Qwen/Qwen1.5-0.5B",
-#     # "Qwen/Qwen1.5-4B",
-#     # "Qwen/Qwen1.5-7B",
-# ]
-# ds_names = [
-#     # "boolq",
-#     # "anli-r2",
-#     # "ethics-virtue",
-#     # "ethics-utilitarianism",
-#     # "ethics-justice",
-#     # "ethics-deontology",
-#     "hellaswag",
-#     # "amazon_polarity",
-#     # "paws",
-#     # "sciq_with_support",
-#     # "sciq",
-#     # "cola",
-#     "cosmos_qa",
-#     # "quail",
-#     "social_i_qa",
-#     # "dream",
-# ]
-# weak_ds_list = [
-#     [
-#         # f"{ds_name}_{'Meta-Llama-3-8B'}_stopped_at_{model_name.split('/')[-1]}",
-#         f"{ds_name}_{model_name.split('/')[-1]}",
-#         # f"{ds_name}_{model_name.split('/')[-1]}_shuffled_err",
-#     ]
-#     for ds_name in ds_names
-#     for model_name in weak_models
-# ]
+weak_models = [
+    # "Qwen/Qwen1.5-0.5B",
+    "Qwen/Qwen1.5-4B",
+    # "Qwen/Qwen1.5-7B",
+]
+ds_names = [
+    # "boolq",
+    # "anli-r2",
+    # "ethics-virtue",
+    # "ethics-utilitarianism",
+    # "ethics-justice",
+    # "ethics-deontology",
+    # "hellaswag",
+    # "amazon_polarity",
+    # "paws",
+    # "sciq_with_support",
+    "sciq",
+    # "cola",
+    # "cosmos_qa",
+    # "quail",
+    # "social_i_qa",
+    # "dream",
+]
+weak_ds_list = [
+    # [
+    # f"{ds_name}_{'Meta-Llama-3-8B'}_stopped_at_{model_name.split('/')[-1]}",
+    f"{ds_name}_{model_name.split('/')[-1]}"
+    # f"{ds_name}_{model_name.split('/')[-1]}_shuffled_err",
+    # ]
+    for ds_name in ds_names
+    for model_name in weak_models
+]
 # weak_ds_list = [item for sublist in weak_ds_list for item in sublist]
 # weak_ds_list += [f"{weak_ds}_shuffled_err" for weak_ds in weak_ds_list]
 # weak_ds_list += [
@@ -286,7 +286,7 @@ root = "/mnt/ssd-1/alexm/w2s/results"
 #         "gt_amplified",
 #     ]
 # ]
-weak_ds_list = ["amazon_polarity_title_only_weak_amplified"]
+# weak_ds_list = ["amazon_polarity_title_only_weak_amplified"]
 strong_model_names = [
     # "Qwen/Qwen1.5-0.5B",
     # "Qwen/Qwen1.5-4B",
@@ -296,7 +296,6 @@ strong_model_names = [
 ]
 default_eval_every = 50
 
-max_mbs = 1
 for seed in [0]:
     for i, strong_model_name in list(enumerate(strong_model_names)):
         quantize = strong_model_name == "meta-llama/Meta-Llama-3-70B"
@@ -357,10 +356,10 @@ for seed in [0]:
                     return command
 
                 weak_marginal_costs = [1 / 10]
-                oracle_spending_fracs = [
-                    0.0,
-                ]  # 0.05, 0.5, 0.95, 1.0]
-                oracle_affordables = [16, 64, 256, 1024, 4096]
+                # oracle_spending_fracs = [0.0, 0.05, 0.5, 0.95, 1.0]
+                # oracle_affordables = [16, 64, 256, 1024, 4096]
+                oracle_spending_fracs = [0.8, 0.6, 0.4, 0.2, 0.05]
+                oracle_affordables = [16]
 
                 pairs = []
                 for weak_marginal_cost in weak_marginal_costs:
@@ -374,7 +373,7 @@ for seed in [0]:
                             )
                             n_oracle = min(n_oracle, 23_000)
                             pairs.append((n_weak, n_oracle))
-                pairs.append((0, 8192))
+                # pairs.append((0, 8192))
                 # pairs = [(0, 64), (0, 16), (0, 8), (80, 8)]
 
                 for num_weak, num_oracle in pairs:

@@ -304,7 +304,6 @@ class SftStage:
 
         print(f"{get_gpu_mem_used() * 100}% of all GPU mem in use before training")
 
-        breakpoint()
         lm_sft(
             ds_dict=ds_dict,
             model=reporter.strong_model.transformer,
@@ -359,7 +358,8 @@ class ModularSftReporter(Reporter):
         ), "incompatible few-shot args"
         assert input_col == "txt", "Only LM SFT is supported"
         self.targets = targets
-        self.prefix_train_datasets()
+        if few_shot_ds is not None:
+            self.prefix_train_datasets()
 
     def fit(self) -> ModularSftReporter:
         optimizer_checkpoint = None
@@ -421,6 +421,8 @@ class ModularSftReporter(Reporter):
             fs_oracle_ids = (
                 set(self.few_shot_ds["id"]) if self.few_shot_type == "oracle" else set()
             )
+        else:
+            fs_weak_ids, fs_oracle_ids = set(), set()
         return {
             "method": self.__class__.__name__,
             "stages": [s.to_dict() for s in self.stages],
