@@ -295,4 +295,12 @@ MODEL_REGISTRY = {
         "lr": 8e-5,
         "lora_modules": DEFAULT_LORA_MODULES,
     },
+    "meta-llama/Meta-Llama-3.1-8B": {
+        "lr": 2e-4,
+        "lora_modules": DEFAULT_LORA_MODULES,
+    },
+    "meta-llama/Meta-Llama-3.1-70B": {
+        "lr": 2e-5,
+        "lora_modules": DEFAULT_LORA_MODULES,
+    },
 }

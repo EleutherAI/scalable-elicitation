@@ -94,25 +94,25 @@ def openai_modify_stages_by_n(stages, num_weak, num_oracle):
 
 # CFG 1: LP(weak), FT(GT), FT(weak) with new head, FT(GT)
 cfgs = {
-    # "seq_sft_openai_settings": {
-    #     "stages": [
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "weak",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "load_best_model_at_end": False,
-    #         },
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "oracle",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "reuse_optimizer_checkpoint": False,
-    #         },
-    #     ],
-    #     "modify_stages_by_n": openai_modify_stages_by_n,
-    # },
+    "seq_sft_openai_settings": {
+        "stages": [
+            {
+                "modules_with_grad": "all",
+                "type": "weak",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "load_best_model_at_end": False,
+            },
+            {
+                "modules_with_grad": "all",
+                "type": "oracle",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "reuse_optimizer_checkpoint": False,
+            },
+        ],
+        "modify_stages_by_n": openai_modify_stages_by_n,
+    },
     # "seq_sft_both_estop_clean_disjoint_2shot": {
     #     "stages": [
     #         {
@@ -159,28 +159,28 @@ cfgs = {
     #     "modify_stages_by_n": estop_modify_stages_by_n,
     #     "extra_args": ["--n_few_shot 32", "--few_shot_type weak"],
     # },
-    "seq_sft_both_estop_clean_disjoint": {
-        "stages": [
-            {
-                "modules_with_grad": "all",
-                "type": "weak",
-                "sampling": "random",
-                "warmup_steps": 40,
-                "val_frac": 0.2,
-                "load_best_model_at_end": True,
-            },
-            {
-                "modules_with_grad": "all",
-                "type": "oracle",
-                "sampling": "random",
-                "warmup_steps": 40,
-                "val_frac": 0.2,
-                "load_best_model_at_end": True,
-                "reuse_optimizer_checkpoint": False,
-            },
-        ],
-        "modify_stages_by_n": estop_modify_stages_by_n,
-    },
+    # "seq_sft_both_estop_clean_disjoint": {
+    #     "stages": [
+    #         {
+    #             "modules_with_grad": "all",
+    #             "type": "weak",
+    #             "sampling": "random",
+    #             "warmup_steps": 40,
+    #             "val_frac": 0.2,
+    #             "load_best_model_at_end": True,
+    #         },
+    #         {
+    #             "modules_with_grad": "all",
+    #             "type": "oracle",
+    #             "sampling": "random",
+    #             "warmup_steps": 40,
+    #             "val_frac": 0.2,
+    #             "load_best_model_at_end": True,
+    #             "reuse_optimizer_checkpoint": False,
+    #         },
+    #     ],
+    #     "modify_stages_by_n": estop_modify_stages_by_n,
+    # },
     # "seq_sft_both_estop_disjoint_logconf": {
     #     "stages": [
     #         {
@@ -238,9 +238,10 @@ root = "/mnt/ssd-1/alexm/w2s/results"
 # root = "/home/fslcollab366/w2s/results"
 
 weak_models = [
-    # "Qwen/Qwen1.5-0.5B",
-    "Qwen/Qwen1.5-4B",
+    "Qwen/Qwen1.5-0.5B",
+    # "Qwen/Qwen1.5-4B",
     # "Qwen/Qwen1.5-7B",
+    # "meta-llama/Meta-Llama-3-8B",
 ]
 ds_names = [
     # "boolq",
@@ -249,16 +250,17 @@ ds_names = [
     # "ethics-utilitarianism",
     # "ethics-justice",
     # "ethics-deontology",
-    # "hellaswag",
+    "hellaswag",
     # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    "sciq",
+    # "sciq",
     # "cola",
-    # "cosmos_qa",
+    "cosmos_qa",
     # "quail",
-    # "social_i_qa",
+    "social_i_qa",
     # "dream",
+    # "anthropic_hh",
 ]
 weak_ds_list = [
     # [
@@ -291,14 +293,16 @@ strong_model_names = [
     # "Qwen/Qwen1.5-0.5B",
     # "Qwen/Qwen1.5-4B",
     # "Qwen/Qwen1.5-7B",
-    "meta-llama/Meta-Llama-3-8B",
+    # "meta-llama/Meta-Llama-3-8B",
     # "meta-llama/Meta-Llama-3-70B",
+    # "meta-llama/Meta-Llama-3.1-8B",
+    "meta-llama/Meta-Llama-3.1-70B",
 ]
 default_eval_every = 50
 
-for seed in [0]:
+for seed in [0, 1, 2]:
     for i, strong_model_name in list(enumerate(strong_model_names)):
-        quantize = strong_model_name == "meta-llama/Meta-Llama-3-70B"
+        quantize = "70B" in strong_model_name
         for weak_ds in weak_ds_list:
             for sweep_name, cfg in cfgs.items():
                 base_command = (
@@ -356,10 +360,10 @@ for seed in [0]:
                     return command
 
                 weak_marginal_costs = [1 / 10]
-                # oracle_spending_fracs = [0.0, 0.05, 0.5, 0.95, 1.0]
-                # oracle_affordables = [16, 64, 256, 1024, 4096]
-                oracle_spending_fracs = [0.8, 0.6, 0.4, 0.2, 0.05]
-                oracle_affordables = [16]
+                oracle_spending_fracs = [1.0]
+                oracle_affordables = [16, 64, 256, 1024, 4096]
+                # oracle_spending_fracs = [0.8, 0.6, 0.4, 0.2, 0.05]
+                # oracle_affordables = [16]
 
                 pairs = []
                 for weak_marginal_cost in weak_marginal_costs:
@@ -373,7 +377,8 @@ for seed in [0]:
                             )
                             n_oracle = min(n_oracle, 23_000)
                             pairs.append((n_weak, n_oracle))
-                # pairs.append((0, 8192))
+                # pairs.append((0, 32_768))
+                pairs.append((0, 8192))
                 # pairs = [(0, 64), (0, 16), (0, 8), (80, 8)]
 
                 for num_weak, num_oracle in pairs:

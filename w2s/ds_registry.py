@@ -675,10 +675,36 @@ register_dataset(
 )
 
 
-def format_anthropic_hh(ex, rng):
-    hard_label = int(rng.random() < 0.5)
-    txt = ex["chosen"] if hard_label else ex["rejected"]
-    return dict(txt=txt, hard_label=hard_label)
+# def format_anthropic_hh(ex, rng):
+#     hard_label = int(rng.random() < 0.5)
+#     txt = ex["chosen"] if hard_label else ex["rejected"]
+#     return dict(txt=txt, hard_label=hard_label)
+
+
+# register_dataset(
+#     "anthropic_hh",
+#     DatasetConfig(
+#         loader=hf_loader("Anthropic/hh-rlhf"),  # type: ignore
+#         formatter=format_anthropic_hh,  # type: ignore
+#     ),
+# )
+def format_anthropic_hh(ex, rng) -> dict:
+    ch, rej = ex["chosen"], ex["rejected"]
+    ch_last_assistant = ch.rfind("Assistant:")
+    ch_prompt, ch_response = ch[:ch_last_assistant].rstrip(), ch[ch_last_assistant:]
+    rej_last_assistant = rej.rfind("Assistant:")
+    rej_prompt, rej_response = (
+        rej[:rej_last_assistant].rstrip(),
+        rej[rej_last_assistant:],
+    )
+    if ch_prompt != rej_prompt:
+        return dict(txt="", hard_label=False)  # empty texts are filtered out
+    resps = [ch_response, rej_response]
+    rng.shuffle(resps)
+    txt = f"{ch_prompt}\n\n<|Completion 1|>{resps[0]}\n\n<|Completion 2|>{resps[1]}"
+    return dict(
+        txt=txt, hard_label=resps[1] == ch_response
+    )  # True if the second is better
 
 
 register_dataset(
