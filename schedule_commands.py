@@ -24,7 +24,7 @@ commands = open(cmds_file).read().strip().split("\n")
 time.sleep(args.delay_hours * 60 * 60)
 
 # File to store GPU usage state
-ROOT = ".scheduler"
+ROOT = Path(__file__).parent / ".scheduler"
 LOG_FORMAT = "logs/log_{datetime}_{gpu_id}.txt"
 GPU_FILE_NAME_FORMAT = "gpu{gpu_id}_state_{process_id}.json"
 PROGRESS_FILE_NAME_FORMAT = "progress_{process_id}.json"

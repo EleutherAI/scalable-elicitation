@@ -244,21 +244,21 @@ weak_models = [
     # "meta-llama/Meta-Llama-3-8B",
 ]
 ds_names = [
-    # "boolq",
+    "boolq",
     # "anli-r2",
     # "ethics-virtue",
     # "ethics-utilitarianism",
     # "ethics-justice",
     # "ethics-deontology",
-    "hellaswag",
+    # "hellaswag",
     # "amazon_polarity",
     # "paws",
     # "sciq_with_support",
-    # "sciq",
-    # "cola",
-    "cosmos_qa",
-    # "quail",
-    "social_i_qa",
+    "sciq",
+    "cola",
+    # "cosmos_qa",
+    "quail",
+    # "social_i_qa",
     # "dream",
     # "anthropic_hh",
 ]
@@ -295,7 +295,7 @@ strong_model_names = [
     # "Qwen/Qwen1.5-7B",
     # "meta-llama/Meta-Llama-3-8B",
     # "meta-llama/Meta-Llama-3-70B",
-    # "meta-llama/Meta-Llama-3.1-8B",
+    "meta-llama/Meta-Llama-3.1-8B",
     "meta-llama/Meta-Llama-3.1-70B",
 ]
 default_eval_every = 50
