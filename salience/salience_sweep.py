@@ -209,9 +209,8 @@ for seed in [0, 1, 2]:
 
             weak_marginal_costs = [1 / 10]
             oracle_spending_fracs = [1.0]
-            oracle_affordables = []  # 2, 8, 16, 64, 256, 1024, 4096]
-            # oracle_spending_fracs = [0.8, 0.6, 0.4, 0.2, 0.05]
-            # oracle_affordables = [16]
+            oracle_affordables = [2, 8, 16, 64, 256, 1024, 4096]
+            oracle_spending_fracs = [0.8, 0.6, 0.4, 0.2, 0.05]
 
             pairs = []
             for weak_marginal_cost in weak_marginal_costs:
@@ -225,11 +224,9 @@ for seed in [0, 1, 2]:
                         )
                         n_oracle = min(n_oracle, 23_000)
                         pairs.append((n_weak, n_oracle))
-            # pairs.append((0, 32_768))
-            # pairs.append((0, 8192))
-            pairs = [(4, 0), (8, 0), (16, 0), (32, 0), (64, 0)]
-            # pairs = [(0, 64), (0, 16), (0, 8), (80, 8)]
-
+            
+            pairs.append((0, 8192))
+        
             for num_weak, num_oracle in pairs:
                 cmd = get_command(cfg, num_weak, num_oracle)
                 if cmd:

@@ -1,4 +1,6 @@
 import copy
+from functools import partial
+from pathlib import Path
 
 import numpy as np
 
@@ -113,194 +115,157 @@ cfgs = {
         ],
         "modify_stages_by_n": openai_modify_stages_by_n,
     },
-    # "seq_sft_both_estop_clean_disjoint_2shot": {
-    #     "stages": [
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "weak",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #         },
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "oracle",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #             "reuse_optimizer_checkpoint": False,
-    #         },
-    #     ],
-    #     "modify_stages_by_n": estop_modify_stages_by_n,
-    #     "extra_args": ["--n_few_shot 2", "--few_shot_type weak"],
-    # },
-    # "seq_sft_both_estop_clean_disjoint_32shot_weak": {
-    #     "stages": [
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "weak",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #         },
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "oracle",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #             "reuse_optimizer_checkpoint": False,
-    #         },
-    #     ],
-    #     "modify_stages_by_n": estop_modify_stages_by_n,
-    #     "extra_args": ["--n_few_shot 32", "--few_shot_type weak"],
-    # },
-    # "seq_sft_both_estop_clean_disjoint": {
-    #     "stages": [
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "weak",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #         },
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "oracle",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #             "reuse_optimizer_checkpoint": False,
-    #         },
-    #     ],
-    #     "modify_stages_by_n": estop_modify_stages_by_n,
-    # },
-    # "seq_sft_both_estop_disjoint_logconf": {
-    #     "stages": [
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "weak",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #             "loss": "logconf",
-    #             "per_device_train_batch_size": 8,
-    #             "gradient_accumulation_steps": 4,
-    #             "per_device_eval_batch_size": 8,
-    #         },
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "oracle",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #             "reuse_optimizer_checkpoint": False,
-    #         },
-    #     ],
-    #     "modify_stages_by_n": partial(estop_modify_stages_by_n, mbs=8, bs=32),
-    #     "extra_args": ["--max_ctx 403"],
-    # },
-    # "seq_sft_both_estop_active_oracle_disjoint": {
-    #     "stages": [
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "weak",
-    #             "sampling": "random",
-    #             "warmup_steps": 40,
-    #             "val_frac": 0.2,
-    #             "load_best_model_at_end": True,
-    #         },
-    #         {
-    #             "modules_with_grad": "all",
-    #             "type": "oracle",
-    #             "sampling": "least_confident_pred",
-    #             "sample_temp": 0.0,
-    #             "warmup_steps": 40,
-    #             "load_best_model_at_end": True,
-    #             "val_frac": 0.2,
-    #             "reuse_optimizer_checkpoint": False,
-    #         },
-    #     ],
-    #     "modify_stages_by_n": estop_modify_stages_by_n,
-    # },
+    "seq_sft_both_estop_clean_disjoint_2shot": {
+        "stages": [
+            {
+                "modules_with_grad": "all",
+                "type": "weak",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+            },
+            {
+                "modules_with_grad": "all",
+                "type": "oracle",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+                "reuse_optimizer_checkpoint": False,
+            },
+        ],
+        "modify_stages_by_n": estop_modify_stages_by_n,
+        "extra_args": ["--n_few_shot 2", "--few_shot_type weak"],
+    },
+    "seq_sft_both_estop_clean_disjoint_32shot_weak": {
+        "stages": [
+            {
+                "modules_with_grad": "all",
+                "type": "weak",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+            },
+            {
+                "modules_with_grad": "all",
+                "type": "oracle",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+                "reuse_optimizer_checkpoint": False,
+            },
+        ],
+        "modify_stages_by_n": estop_modify_stages_by_n,
+        "extra_args": ["--n_few_shot 32", "--few_shot_type weak"],
+    },
+    "seq_sft_both_estop_clean_disjoint": {
+        "stages": [
+            {
+                "modules_with_grad": "all",
+                "type": "weak",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+            },
+            {
+                "modules_with_grad": "all",
+                "type": "oracle",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+                "reuse_optimizer_checkpoint": False,
+            },
+        ],
+        "modify_stages_by_n": estop_modify_stages_by_n,
+    },
+    "seq_sft_both_estop_disjoint_logconf": {
+        "stages": [
+            {
+                "modules_with_grad": "all",
+                "type": "weak",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+                "loss": "logconf",
+                "per_device_train_batch_size": 8,
+                "gradient_accumulation_steps": 4,
+                "per_device_eval_batch_size": 8,
+            },
+            {
+                "modules_with_grad": "all",
+                "type": "oracle",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+                "reuse_optimizer_checkpoint": False,
+            },
+        ],
+        "modify_stages_by_n": partial(estop_modify_stages_by_n, mbs=8, bs=32),
+        "extra_args": ["--max_ctx 403"],
+    },
+    "seq_sft_both_estop_active_oracle_disjoint": {
+        "stages": [
+            {
+                "modules_with_grad": "all",
+                "type": "weak",
+                "sampling": "random",
+                "warmup_steps": 40,
+                "val_frac": 0.2,
+                "load_best_model_at_end": True,
+            },
+            {
+                "modules_with_grad": "all",
+                "type": "oracle",
+                "sampling": "least_confident_pred",
+                "sample_temp": 0.0,
+                "warmup_steps": 40,
+                "load_best_model_at_end": True,
+                "val_frac": 0.2,
+                "reuse_optimizer_checkpoint": False,
+            },
+        ],
+        "modify_stages_by_n": estop_modify_stages_by_n,
+    },
 }
 
 
-root = "/mnt/ssd-1/alexm/w2s/results"
-# root = "/home/fslcollab366/w2s/results"
+root = str(Path(__file__).parent)
 
 weak_models = [
     "Qwen/Qwen1.5-0.5B",
-    # "Qwen/Qwen1.5-4B",
-    # "Qwen/Qwen1.5-7B",
-    # "meta-llama/Meta-Llama-3-8B",
 ]
 ds_names = [
     "boolq",
-    # "anli-r2",
-    # "ethics-virtue",
-    # "ethics-utilitarianism",
-    # "ethics-justice",
-    # "ethics-deontology",
-    # "hellaswag",
-    # "amazon_polarity",
-    # "paws",
-    # "sciq_with_support",
+    "hellaswag",
+    "paws",
     "sciq",
     "cola",
-    # "cosmos_qa",
+    "cosmos_qa",
     "quail",
-    # "social_i_qa",
-    # "dream",
-    # "anthropic_hh",
+    "social_i_qa",
 ]
 weak_ds_list = [
-    # [
-    # f"{ds_name}_{'Meta-Llama-3-8B'}_stopped_at_{model_name.split('/')[-1]}",
     f"{ds_name}_{model_name.split('/')[-1]}"
-    # f"{ds_name}_{model_name.split('/')[-1]}_shuffled_err",
-    # ]
     for ds_name in ds_names
     for model_name in weak_models
 ]
-# weak_ds_list = [item for sublist in weak_ds_list for item in sublist]
-# weak_ds_list += [f"{weak_ds}_shuffled_err" for weak_ds in weak_ds_list]
-# weak_ds_list += [
-#     f"{ds_name}_{prompt}"
-#     for ds_name in [
-#         "ethics_deontology_excuse_only",
-#         "amazon_polarity_title_only",
-#         "sciq_support_contains",
-#         "paws_consistency",
-#     ]
-#     for prompt in [
-#         "weak_amplified",
-#         "both_amplified",
-#         "neither_amplified",
-#         "gt_amplified",
-#     ]
-# ]
-# weak_ds_list = ["amazon_polarity_title_only_weak_amplified"]
 strong_model_names = [
-    # "Qwen/Qwen1.5-0.5B",
-    # "Qwen/Qwen1.5-4B",
-    # "Qwen/Qwen1.5-7B",
-    # "meta-llama/Meta-Llama-3-8B",
-    # "meta-llama/Meta-Llama-3-70B",
-    "meta-llama/Meta-Llama-3.1-8B",
-    "meta-llama/Meta-Llama-3.1-70B",
+    "Qwen/Qwen1.5-0.5B",
+    "Qwen/Qwen1.5-4B",
+    "Qwen/Qwen1.5-7B",
+    "meta-llama/Meta-Llama-3-8B",
+    "meta-llama/Meta-Llama-3-70B",
 ]
 default_eval_every = 50
 
-for seed in [0, 1, 2]:
+for seed in [0,]:
     for i, strong_model_name in list(enumerate(strong_model_names)):
         quantize = "70B" in strong_model_name
         for weak_ds in weak_ds_list:
@@ -345,9 +310,6 @@ for seed in [0, 1, 2]:
                         model_name=strong_model_name,
                     )
 
-                    # if os.path.exists(f"{root}/{weak_ds}/{run_name}/results.json"):
-                    #     raise ValueError(f"Results already exist for {run_name}")
-
                     for j, stage in enumerate(stages):
                         prefix = f"stage{j}_"
                         for key, value in stage.items():
@@ -360,10 +322,8 @@ for seed in [0, 1, 2]:
                     return command
 
                 weak_marginal_costs = [1 / 10]
-                oracle_spending_fracs = [1.0]
                 oracle_affordables = [16, 64, 256, 1024, 4096]
-                # oracle_spending_fracs = [0.8, 0.6, 0.4, 0.2, 0.05]
-                # oracle_affordables = [16]
+                oracle_spending_fracs = [0.8, 0.6, 0.4, 0.2, 0.05]
 
                 pairs = []
                 for weak_marginal_cost in weak_marginal_costs:
@@ -377,9 +337,9 @@ for seed in [0, 1, 2]:
                             )
                             n_oracle = min(n_oracle, 23_000)
                             pairs.append((n_weak, n_oracle))
-                # pairs.append((0, 32_768))
+                
                 pairs.append((0, 8192))
-                # pairs = [(0, 64), (0, 16), (0, 8), (80, 8)]
+                
 
                 for num_weak, num_oracle in pairs:
                     cmd = get_command(cfg, num_weak, num_oracle)

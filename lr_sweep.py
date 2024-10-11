@@ -1,10 +1,8 @@
 models = {
-    # "meta-llama/Meta-Llama-3.1-8B": [8e-5, 2e-4, 5e-4],
-    "meta-llama/Meta-Llama-3.1-70B": [1e-5, 4e-5, 2e-4],
-    # "meta-llama/Meta-Llama-3-8B": [8e-5, 2e-4, 5e-4],
-    # "Qwen/Qwen1.5-0.5B": [5e-4, 1e-3, 3e-3],
-    # "Qwen/Qwen1.5-4B": [2e-4, 5e-4, 1e-3],
-    # "Qwen/Qwen1.5-7B": [8e-5, 2e-4, 5e-4],
+    "meta-llama/Meta-Llama-3-8B": [8e-5, 2e-4, 5e-4],
+    "Qwen/Qwen1.5-0.5B": [5e-4, 1e-3, 3e-3],
+    "Qwen/Qwen1.5-4B": [2e-4, 5e-4, 1e-3],
+    "Qwen/Qwen1.5-7B": [8e-5, 2e-4, 5e-4],
 }
 seeds = [
     1,

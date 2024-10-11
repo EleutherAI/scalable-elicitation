@@ -45,8 +45,8 @@ def main(
         run_name = f"{ds_name}_{model_last}"
     if results_folder is None:
         results_folder = Path(__file__).parent / "results"
+    results_folder.mkdir(parents=True, exist_ok=True)
     output_dir = Path(results_folder) / run_name  # type: ignore
-
     if (output_dir / "weak_train").exists() and (output_dir / "weak_test").exists():
         print(f"\033[33m===== Weak labels already exist for {output_dir} =====\033[0m")
         return
@@ -119,11 +119,11 @@ def main(
     if also_save_shuffled_error_labels:
         for name, ds in [("train", train_ds), ("test", test_ds)]:
             ds = ds.with_format("torch")
-            err = (ds["soft_pred"] - ds["soft_label"]).abs()
+            err = (ds["soft_pred"] - ds["soft_label"]).abs()  # type: ignore
             shuffled_err = err.clone()
             shuffled_err[torch.randperm(len(shuffled_err)), :] = err
             ds = ds.remove_columns(["soft_pred"])
-            ds = ds.add_column(
+            ds = ds.add_column(  # type: ignore
                 "soft_pred",
                 (
                     ds["soft_label"]
